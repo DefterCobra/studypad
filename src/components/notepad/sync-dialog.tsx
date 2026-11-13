@@ -163,7 +163,8 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="relative mt-1.5">
-      <pre className="max-h-36 overflow-auto rounded bg-muted p-2 pr-16 text-[11px] leading-snug">
+      {/* wraps instead of scrolling: a nested scroll box would trap touch drags and stop the guide from scrolling */}
+      <pre className="whitespace-pre-wrap break-words rounded bg-muted p-2 pt-8 text-[11px] leading-snug">
         {text}
       </pre>
       <Button
