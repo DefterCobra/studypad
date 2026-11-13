@@ -107,6 +107,8 @@ interface UsersState {
   /** removes the user, their whole IndexedDB partition and per-user markers */
   removeUser: (id: string) => void
   setCurrentUserId: (id: string | null) => void
+  /** cloud sync: replace the registry wholesale with a merged list */
+  replaceUsers: (users: PadUser[]) => void
 }
 
 export const useUsersStore = create<UsersState>()((set, get) => ({
@@ -177,4 +179,13 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
   },
 
   setCurrentUserId: (id) => set({ currentUserId: id }),
+
+  replaceUsers: (users) => {
+    try {
+      window.localStorage.setItem(REGISTRY_KEY, JSON.stringify(users))
+    } catch {
+      // registry write failed — the in-memory list still works this session
+    }
+    set({ users })
+  },
 }))

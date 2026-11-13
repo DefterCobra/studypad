@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { Check, Cloud, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { isConfigured } from '@/lib/notepad/sync-backends'
+import { setCloudEnabled, useSyncStore } from '@/lib/notepad/sync'
 import { cn } from '@/lib/utils'
 import { FONT_OPTIONS, SIZE_OPTIONS, usePrefsStore, useLowMemoryMode, type FontOption, type TabMode, type PerfMode, type HomeBatch } from '@/lib/prefs'
 
@@ -44,6 +47,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const resetPrefs = usePrefsStore((s) => s.resetPrefs)
   // the effective V10 optimisation state — Auto resolves against the device
   const lowMemory = useLowMemoryMode()
+  const cloudOn = useSyncStore((s) => s.enabled)
+  const cloudConfig = useSyncStore((s) => s.config)
+  const cloudAccount = useSyncStore((s) => s.account)
+  const cloudBusy = useSyncStore((s) => s.status === 'syncing')
+  const openCloud = () => useSyncStore.getState().setDialogOpen(true)
+  const toggleCloud = async (on: boolean) => {
+    // no saved connection yet (or the stored session is gone) -> ask for the details
+    if (on && !isConfigured(cloudConfig)) return openCloud()
+    if (!(await setCloudEnabled(on))) openCloud()
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -439,6 +452,38 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               )
             })}
           </div>
+        </section>
+
+        {/* ---------- Cloud save ---------- */}
+        <section data-testid="cloud-save-section">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cloud save</p>
+          <p className="mt-0.5 text-xs text-muted-foreground/80">
+            Sync notes to your own Supabase or Firebase project so every device shares them.
+          </p>
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border p-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <Cloud className="h-4 w-4" /> Save to cloud
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {cloudOn
+                  ? `${cloudConfig.provider === 'supabase' ? 'Supabase' : cloudConfig.provider === 'firebase' ? 'Firebase' : 'Server'}${cloudAccount ? ` · ${cloudAccount}` : ''}`
+                  : isConfigured(cloudConfig)
+                    ? 'Off — settings saved'
+                    : 'Not set up'}
+              </p>
+            </div>
+            <Switch
+              checked={cloudOn}
+              disabled={cloudBusy}
+              onCheckedChange={(on) => void toggleCloud(on)}
+              aria-label="Cloud save"
+              data-testid="cloud-save-switch"
+            />
+          </div>
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={openCloud} data-testid="cloud-save-configure">
+            {isConfigured(cloudConfig) ? 'Update connection…' : 'Add connection…'}
+          </Button>
         </section>
 
         <DialogFooter className="items-center gap-2 sm:justify-between">

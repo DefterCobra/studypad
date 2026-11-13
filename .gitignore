@@ -75,3 +75,6 @@ server.log
 .eslintcache
 nohup.out
 .nohup.out
+
+# self-host server: synced pads
+/data/

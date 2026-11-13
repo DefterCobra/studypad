@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import {
   ArchiveRestore,
   BookOpen,
+  Cloud,
   Database,
   Download,
   FileArchive,
@@ -65,6 +66,8 @@ import { ImportZipDialog } from '@/components/notepad/import-zip-dialog'
 import { UserGate } from '@/components/notepad/user-gate'
 import { UserMenu } from '@/components/notepad/user-menu'
 import { HomeScreen } from '@/components/notepad/home-screen'
+import { SyncRunner } from '@/components/notepad/sync-runner'
+import { useSyncStore } from '@/lib/notepad/sync'
 import { SettingsDialog } from '@/components/notepad/settings-dialog'
 import { usePrefsStore } from '@/lib/prefs'
 
@@ -130,6 +133,12 @@ function NotepadWorkspace({
   const openNoteIds = useNotepadStore((s) => s.openNoteIds)
 
   const focusActive = focusMode !== 'off'
+
+  const syncEnabled = useSyncStore((s) => s.enabled)
+  const syncStatus = useSyncStore((s) => s.status)
+  const syncLabel = !syncEnabled
+    ? 'Off'
+    : { syncing: 'Syncing…', synced: 'Synced', offline: 'Offline', error: 'Error', conflict: 'Conflict', idle: 'On', off: 'On' }[syncStatus]
 
   // Ctrl/Cmd+P opens the customisable print dialog instead of the raw browser print
   useEffect(() => {
@@ -462,6 +471,11 @@ function NotepadWorkspace({
                 <ArchiveRestore className="h-4 w-4" /> Import notes (.zip)…
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => useSyncStore.getState().setDialogOpen(true)} data-testid="sync-menu-item">
+                <Cloud className="h-4 w-4" /> Cloud save…
+                <span className="ml-auto text-[10px] text-muted-foreground">{syncLabel}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={() => setClearOpen(true)}>
                 <Trash2 className="h-4 w-4" /> Clear all data
               </DropdownMenuItem>
@@ -758,16 +772,19 @@ export default function Home() {
     [userId, toast],
   )
 
-  if (!userId) {
-    return <UserGate onEnter={enterUser} busy={switchingTo} lastUserId={lastUserId} />
-  }
-
   return (
-    <NotepadWorkspace
-      key={userId}
-      userId={userId}
-      onSwitchUser={enterUser}
-      onUserDeleted={handleUserDeleted}
-    />
+    <>
+      <SyncRunner userId={userId} />
+      {userId ? (
+        <NotepadWorkspace
+          key={userId}
+          userId={userId}
+          onSwitchUser={enterUser}
+          onUserDeleted={handleUserDeleted}
+        />
+      ) : (
+        <UserGate onEnter={enterUser} busy={switchingTo} lastUserId={lastUserId} />
+      )}
+    </>
   )
 }

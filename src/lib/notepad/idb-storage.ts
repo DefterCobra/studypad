@@ -128,6 +128,23 @@ export async function clearUserPartition(userId: string): Promise<void> {
   userInstances.delete(userId)
 }
 
+/**
+ * Cloud sync reads / writes a *specific* user's persisted state rather than
+ * the active one — the active pointer may already have moved on to the next
+ * user while a sync for the previous one is still in flight.
+ */
+export async function readPersistedFor(userId: string, name: string = STORAGE_KEY): Promise<string | null> {
+  try {
+    return (await dbFor(userId).getItem<string>(name)) ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function writePersistedFor(userId: string, value: string, name: string = STORAGE_KEY): Promise<void> {
+  await dbFor(userId).setItem(name, value)
+}
+
 /** no-op storage used during SSR — reads find nothing, writes go nowhere, so
  *  the persist middleware hydrates instantly with the default state instead
  *  of erroring on an undefined storage. Methods are async on purpose: the
