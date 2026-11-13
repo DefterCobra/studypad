@@ -202,8 +202,12 @@ function InfoGuide({ provider }: { provider: "supabase" | "firebase" }) {
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="max-h-[60dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto text-xs"
+        className="max-h-[60dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain text-xs"
         data-testid="sync-info-panel"
+        // The popover is portalled outside the Dialog, whose scroll lock swallows wheel / touch
+        // scrolling anywhere else — stop those events before they reach the lock.
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
       >
         <p className="text-sm font-semibold">
           Set up {PROVIDER_LABEL[provider]}
