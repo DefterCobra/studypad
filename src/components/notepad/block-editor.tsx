@@ -60,6 +60,11 @@ export interface BlockEditorHandle {
   transformActive: (type: BlockType) => void
   /** insert a rendered equation block and open its LaTeX editor */
   insertMathBlock: (tex?: string, caretFromEnd?: number) => void
+  /** insert a formula made in the formula maker at the remembered position
+   *  (the block the slash/+ menu was opened on), else like insertMathBlock */
+  insertFormulaBlock: (tex: string) => void
+  /** forget the remembered formula position (formula maker closed unused) */
+  clearPendingFormula: () => void
   /** insert `$tex$` at the caret of the active text block, or fall back to an equation block */
   insertInlineOrBlock: (tex: string) => void
   /** wrap the current textarea selection with markers — returns false when no text block is active */
@@ -80,6 +85,8 @@ interface BlockEditorProps {
   onChange: (markdown: string) => void
   /** image flows that need app-level UI: file picker / clipboard read / whiteboard */
   onImageAction?: (kind: ImageAction) => void
+  /** open the visual formula maker (slash / + menu item) — the pane owns the dialog */
+  onFormulaMaker?: () => void
   /** open the whiteboard pre-loaded with this image (annotation) */
   onAnnotateImage?: (blockId: string, src: string) => void
 }
@@ -369,7 +376,7 @@ function InlineMathLayer({
  * Typing "/" opens the quick-insert command menu.
  */
 export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
-  function BlockEditor({ noteId, content, onChange, onImageAction, onAnnotateImage }, ref) {
+  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onAnnotateImage }, ref) {
     const [blocks, setBlocks] = useState<Block[]>(() => parseMarkdownToBlocks(content))
     const [activeId, setActiveId] = useState<string | null>(null)
     const [slash, setSlash] = useState<SlashState | null>(null)
@@ -394,7 +401,9 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
     const debounceRef = useRef<number | undefined>(undefined)
     const blurTimerRef = useRef<number | undefined>(undefined)
     const pendingImageRef = useRef<{ replaceId?: string; afterId?: string } | null>(null)
+    const pendingFormulaRef = useRef<{ replaceId?: string; afterId?: string } | null>(null)
     const onImageActionRef = useRef(onImageAction)
+    const onFormulaMakerRef = useRef(onFormulaMaker)
     const onAnnotateImageRef = useRef(onAnnotateImage)
     const flashTimerRef = useRef<number | undefined>(undefined)
 
@@ -405,6 +414,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
       slashRef.current = slash
       onChangeRef.current = onChange
       onImageActionRef.current = onImageAction
+      onFormulaMakerRef.current = onFormulaMaker
       onAnnotateImageRef.current = onAnnotateImage
     })
 
@@ -578,10 +588,11 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
 
     const handleBlurDeactivate = (id: string, relatedTarget: EventTarget | null) => {
       cancelBlurDeactivate()
-      // Keep the block "active" when focus moves to the formatting toolbar or a
-      // menu — the toolbar needs to act on the block the user was just editing.
+      // Keep the block "active" when focus moves to the formatting toolbar, a
+      // menu or a dialog — the toolbar needs to act on the block the user was
+      // just editing, and the formula maker inserts into it after closing.
       const rt = relatedTarget as HTMLElement | null
-      if (rt && rt.closest('[role="toolbar"], [role="menu"]')) return
+      if (rt && rt.closest('[role="toolbar"], [role="menu"], [role="dialog"]')) return
       blurTimerRef.current = window.setTimeout(() => {
         blurTimerRef.current = undefined
         setActiveId((cur) => (cur === id ? null : cur))
@@ -949,6 +960,22 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
         return
       }
 
+      // ---- formula maker: the pane opens its dialog. The trigger block's
+      // position is remembered now (an empty "/"-trigger paragraph is replaced
+      // in place, an occupied line gets the equation below it) — while the
+      // dialog is open the 140 ms blur-deactivate may clear the active block,
+      // so insertion must not depend on it ----
+      if (cmd.formulaMaker) {
+        if (stripped !== target.text) setBlockText(targetId, stripped)
+        pendingFormulaRef.current =
+          target.type === 'p' && stripped.trim() === ''
+            ? { replaceId: targetId }
+            : { afterId: targetId }
+        setActiveId(null)
+        onFormulaMakerRef.current?.()
+        return
+      }
+
       if (!cmd.blockType) return
       const type = cmd.blockType
 
@@ -1301,6 +1328,37 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
           if (id) insertBlockAfter(id, nb)
           else commit([...blocksRef.current, nb])
           activate(nb.id, caret)
+        },
+        insertFormulaBlock: (tex: string) => {
+          const pending = pendingFormulaRef.current
+          pendingFormulaRef.current = null
+          // the block the slash/+ menu was opened on (empty trigger paragraph
+          // → swapped in place, occupied line → equation right below)
+          if (pending?.replaceId && blocksRef.current.some((b) => b.id === pending.replaceId)) {
+            transformBlock(pending.replaceId, 'math', tex)
+            activate(pending.replaceId, 'end')
+            return
+          }
+          if (pending?.afterId && blocksRef.current.some((b) => b.id === pending.afterId)) {
+            const nb = insertBlockAfter(pending.afterId, createBlock('math', tex))
+            activate(nb.id, 'end')
+            return
+          }
+          // no remembered position (toolbar flow) — behave like insertMathBlock
+          const id = activeIdRef.current
+          const active = id ? blocksRef.current.find((b) => b.id === id) : undefined
+          if (active && active.type === 'p' && active.text.trim() === '') {
+            transformBlock(active.id, 'math', tex)
+            activate(active.id, 'end')
+            return
+          }
+          const nb = createBlock('math', tex)
+          if (id) insertBlockAfter(id, nb)
+          else commit([...blocksRef.current, nb])
+          activate(nb.id, 'end')
+        },
+        clearPendingFormula: () => {
+          pendingFormulaRef.current = null
         },
         insertInlineOrBlock: (tex: string) => {
           const id = activeIdRef.current

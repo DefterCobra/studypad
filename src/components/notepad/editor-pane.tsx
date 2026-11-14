@@ -100,6 +100,9 @@ export interface EditorPaneProps {
   onToggleToolbarHidden?: () => void
   /** called when anything inside the pane gains focus — brings the toolbar back */
   onRevealToolbar?: () => void
+  /** bumped by the app header's Formula maker button — the editor of the
+   *  currently selected note reacts by opening its formula maker dialog */
+  formulaMakerRequest?: number
 }
 
 export function EditorPane({
@@ -118,6 +121,7 @@ export function EditorPane({
   onToggleToolbarPinned,
   onToggleToolbarHidden,
   onRevealToolbar,
+  formulaMakerRequest,
 }: EditorPaneProps) {
   const note = useNotepadStore((s) => {
     const id = noteId ?? s.selectedNoteId
@@ -139,6 +143,21 @@ export function EditorPane({
   // V10.2 — reading mode: the note renders as clean read-only prose while the
   // toolbar, title field and block editor step out of the way
   const [reading, setReading] = useState(false)
+  // app header's Formula maker button — every mounted pane sees the counter,
+  // but only the editor of the currently selected note reacts (hidden
+  // stacked panes belong to other notes). The ref starts at the incoming
+  // value so a pane remounting mid-session never replays an old request.
+  const selectedNoteId = useNotepadStore((s) => s.selectedNoteId)
+  const lastFormulaRequest = useRef(formulaMakerRequest ?? 0)
+  useEffect(() => {
+    const req = formulaMakerRequest ?? 0
+    if (!formulaMakerRequest || req === lastFormulaRequest.current) return
+    lastFormulaRequest.current = req
+    if ((noteId ?? selectedNoteId) !== selectedNoteId) return
+    // inserting needs the block editor — reading mode steps aside
+    setReading(false)
+    setFormulaMakerOpen(true)
+  }, [formulaMakerRequest, noteId, selectedNoteId])
 
   // Esc leaves reading mode — same convention as the focus modes
   useEffect(() => {
@@ -260,7 +279,7 @@ export function EditorPane({
   // ---------- formula maker: visual equation builder ----------
 
   const handleFormulaMakerInsert = (latex: string) => {
-    insertTemplate(`$$\n${latex}\n$$\n`)
+    editorRef.current?.insertFormulaBlock(latex)
     setFormulaMakerOpen(false)
     toast({
       title: 'Formula inserted',
@@ -917,6 +936,7 @@ export function EditorPane({
             content={note.content}
             onChange={handleContentChange}
             onImageAction={handleImageAction}
+            onFormulaMaker={() => setFormulaMakerOpen(true)}
             onAnnotateImage={handleAnnotateImage}
           />
         )}
@@ -938,7 +958,11 @@ export function EditorPane({
       {/* Formula maker — full-screen visual equation builder */}
       <FormulaMakerDialog
         open={formulaMakerOpen}
-        onOpenChange={setFormulaMakerOpen}
+        onOpenChange={(open) => {
+          setFormulaMakerOpen(open)
+          // closed without inserting — forget where the / or + menu was opened
+          if (!open) editorRef.current?.clearPendingFormula()
+        }}
         onInsert={handleFormulaMakerInsert}
       />
 

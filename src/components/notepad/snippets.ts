@@ -13,6 +13,7 @@ export type CommandIcon =
   | 'code'
   | 'math'
   | 'chem'
+  | 'formula'
   | 'image'
   | 'clipboard'
   | 'whiteboard'
@@ -40,6 +41,8 @@ export interface SlashCommand {
   preview?: string
   /** image flow — handled by the editor pane (file picker / clipboard / whiteboard) */
   imageAction?: ImageAction
+  /** opens the visual formula maker — handled by the editor pane's dialog */
+  formulaMaker?: true
 }
 
 /** Notion-style "/" commands for the block editor */
@@ -151,6 +154,14 @@ export const BLOCK_COMMANDS: SlashCommand[] = [
     blockType: 'math',
     blockText: '\\ce{}',
     caretFromEnd: -1,
+  },
+  {
+    id: 'formula-maker',
+    label: 'Formula maker',
+    hint: 'Build an equation visually — the LaTeX types itself',
+    keywords: 'formula maker builder visual equation latex chemistry math balance katex create tool',
+    icon: 'formula',
+    formulaMaker: true,
   },
   {
     id: 'image',

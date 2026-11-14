@@ -32,6 +32,7 @@ export function FormulaMakerDialog({ open, onOpenChange, onInsert }: FormulaMake
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* overrides turn the centered card into a true full-screen workspace */}
       <DialogContent
+        data-testid="formula-maker-dialog"
         className="inset-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none"
         aria-describedby={undefined}
       >

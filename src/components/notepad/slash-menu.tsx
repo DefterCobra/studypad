@@ -18,6 +18,7 @@ import {
   Minus,
   Quote,
   Radical,
+  Sparkles,
   Table as TableIcon,
   Tag,
   type LucideIcon,
@@ -39,6 +40,7 @@ const ICONS: Record<CommandIcon, LucideIcon> = {
   code: Code2,
   math: Radical,
   chem: FlaskConical,
+  formula: Sparkles,
   image: Image,
   clipboard: Clipboard,
   whiteboard: Brush,
@@ -193,7 +195,7 @@ export function SlashMenu({ commands, activeIndex, query, onSelect, onHover }: S
               <span
                 className={cn(
                   'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-background',
-                  cmd.icon === 'chem'
+                  cmd.icon === 'chem' || cmd.icon === 'formula'
                     ? 'text-amber-600 dark:text-amber-400'
                     : 'text-muted-foreground',
                 )}

@@ -19,6 +19,7 @@ import {
   Pin,
   PinOff,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   TriangleAlert,
   Upload,
@@ -52,6 +53,7 @@ import { allUsers, useUsersStore, LAST_USER_KEY } from '@/lib/notepad/users'
 import type { EditorFocusMode, MobileView, NotepadBackup } from '@/lib/notepad/types'
 import { useToast } from '@/hooks/use-toast'
 import { useChromeVisibility } from '@/hooks/use-chrome-visibility'
+import { useIsDesktop } from '@/hooks/use-media-query'
 import { Sidebar } from '@/components/notepad/sidebar'
 import { NotesPane } from '@/components/notepad/notes-pane'
 import { MultiEditorPane } from '@/components/notepad/multi-editor-pane'
@@ -137,6 +139,10 @@ function NotepadWorkspace({
   const openNoteIds = useNotepadStore((s) => s.openNoteIds)
   // V10.3 — UI animations (Settings → Optimisation): slide/fade transitions
   const animsOn = useAnimationsEnabled()
+  // V10.3.1 — the header's Formula maker button asks the active editor pane to
+  // open its dialog via a counter (multiple panes may be mounted at once)
+  const [formulaMakerRequest, setFormulaMakerRequest] = useState(0)
+  const isDesktop = useIsDesktop()
 
   const focusActive = focusMode !== 'off'
 
@@ -272,6 +278,15 @@ function NotepadWorkspace({
     if (sideBySide && (!sideLeft || !sideRight)) setSideBySide(null)
   }, [sideBySide, sideLeft, sideRight])
   const exitSideBySide = () => setSideBySide(null)
+  // the header's Formula maker button only makes sense when a note editor is
+  // the active surface: workspace (not home / side-by-side), the Notes tab and
+  // an actually open note — and on phones only while the editor is on screen
+  const formulaHeaderButton =
+    !homeOpen &&
+    !(sideLeft && sideRight) &&
+    chapterTab === 'notes' &&
+    !!selectedNote &&
+    (isDesktop || mobileView === 'editor')
   const { importData, clearAll } = useNotepadStore()
   const { toast } = useToast()
 
@@ -472,6 +487,21 @@ function NotepadWorkspace({
           >
             {headerPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
           </Button>
+          {/* Formula maker — visual equation builder for the open note */}
+          {formulaHeaderButton && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              aria-label="Open the formula maker"
+              title="Formula maker"
+              data-testid="header-formula-button"
+              onClick={() => setFormulaMakerRequest((r) => r + 1)}
+            >
+              <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="hidden md:inline">Formula maker</span>
+            </Button>
+          )}
           {/* Formula & markdown cheat sheet — one click away */}
           <Button
             variant="outline"
@@ -680,6 +710,7 @@ function NotepadWorkspace({
               onToggleToolbarPinned={toggleToolbarPinned}
               onToggleToolbarHidden={toggleToolbarHidden}
               onRevealToolbar={showToolbar}
+              formulaMakerRequest={formulaMakerRequest}
             />
           )}
           </div>
