@@ -493,9 +493,82 @@ export function EditorPane({
             </Button>
           )}
 
-          {/* Note menu — everything that used to be a row of icon buttons
-              (focus modes, toolbar pin/hide, print) now lives in here, so the
-              bar itself only carries the reading toggle and this menu */}
+          {/* Print — always-needed, one click away beside the reading toggle
+              (Ctrl+P works too); printing from reading view is natural since
+              both render the same markdown pipeline */}
+          {onPrint && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5"
+              onClick={onPrint}
+              title="Print (Ctrl+P)"
+              aria-label="Print note"
+              data-testid="editor-print-button"
+            >
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">Print</span>
+            </Button>
+          )}
+
+          {/* Toolbar pin — keep the formatting toolbar always visible, or let
+              it slide away with the app header while scrolling for extra space
+              (back by request — this one is always needed) */}
+          {!reading && onToggleToolbarPinned && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label={
+                toolbarPinned
+                  ? 'Unpin toolbar — it will auto-hide while scrolling'
+                  : 'Pin toolbar — always visible'
+              }
+              title={
+                toolbarPinned
+                  ? 'Unpin toolbar (auto-hides while scrolling)'
+                  : 'Pin toolbar (always visible)'
+              }
+              data-testid="toolbar-pin-button"
+              onClick={onToggleToolbarPinned}
+            >
+              {toolbarPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+            </Button>
+          )}
+
+          {/* Explicit hide — the toolbar stays hidden no matter what (scrolling
+              up, focusing the editor, switching notes, focus modes) until it
+              is explicitly shown again from this same button (back by request) */}
+          {!reading && onToggleToolbarHidden && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label={
+                toolbarDismissed
+                  ? 'Show toolbar — bring the formatting toolbar back'
+                  : 'Hide toolbar — stays hidden until you show it again'
+              }
+              title={
+                toolbarDismissed
+                  ? 'Show toolbar (bring the formatting toolbar back)'
+                  : 'Hide toolbar (stays hidden until you show it again)'
+              }
+              data-testid="toolbar-toggle-button"
+              onClick={onToggleToolbarHidden}
+            >
+              {toolbarDismissed ? (
+                <PanelTopOpen className="h-4 w-4" />
+              ) : (
+                <PanelTopClose className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          {/* Note menu — the focus modes (full area / fullscreen) plus the
+              note actions (pin, copy, export, delete); print and the toolbar
+              pin/show buttons sit directly on the bar since they are always
+              needed */}
           <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -504,7 +577,7 @@ export function EditorPane({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {/* view & toolbar — only meaningful in the editor */}
+            {/* view — only meaningful in the editor */}
             {!reading && (
               <>
                 {onEnterFocus && (
@@ -522,33 +595,9 @@ export function EditorPane({
                     <span className="ml-auto text-[10px] text-muted-foreground">window chrome too</span>
                   </DropdownMenuItem>
                 )}
-                {onToggleToolbarPinned && (
-                  <DropdownMenuItem onClick={onToggleToolbarPinned}>
-                    {toolbarPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                    {toolbarPinned ? 'Unpin toolbar' : 'Pin toolbar'}
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      {toolbarPinned ? 'auto-hides on scroll' : 'always visible'}
-                    </span>
-                  </DropdownMenuItem>
-                )}
-                {onToggleToolbarHidden && (
-                  <DropdownMenuItem onClick={onToggleToolbarHidden}>
-                    {toolbarDismissed ? (
-                      <PanelTopOpen className="h-4 w-4" />
-                    ) : (
-                      <PanelTopClose className="h-4 w-4" />
-                    )}
-                    {toolbarDismissed ? 'Show toolbar' : 'Hide toolbar'}
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem onClick={() => onPrint?.()} disabled={!onPrint}>
-              <Printer className="h-4 w-4" /> Print
-              <span className="ml-auto text-[10px] text-muted-foreground">Ctrl+P</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => togglePin(note.id)}>
               {note.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {note.pinned ? 'Unpin note' : 'Pin note'}
