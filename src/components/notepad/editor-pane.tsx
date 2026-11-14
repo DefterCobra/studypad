@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   BookOpen,
+  BookOpenText,
   Brush,
   Check,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
   PanelLeft,
   PanelTopClose,
   PanelTopOpen,
+  Pencil,
   Pin,
   PinOff,
   Printer,
@@ -69,7 +71,7 @@ import { BlockEditor, type BlockEditorHandle } from './block-editor'
 import { rememberScroll, recallScroll } from '@/lib/notepad/scroll-memory'
 import { autoResize } from '@/lib/notepad/blocks'
 import { FORMULA_TEMPLATES, unwrapTemplate, type ImageAction } from './snippets'
-import { Latex } from './markdown-preview'
+import { Latex, MarkdownPreview } from './markdown-preview'
 import { Whiteboard } from './whiteboard'
 import { FormulaMakerDialog } from './formula-maker/formula-maker-dialog'
 import { LARGE_IMAGE_BYTES, formatBytes, processImageFile } from '@/lib/notepad/image'
@@ -134,6 +136,19 @@ export function EditorPane({
   const [whiteboardInitial, setWhiteboardInitial] = useState<string | null>(null)
   const [annotateTargetId, setAnnotateTargetId] = useState<string | null>(null)
   const [formulaMakerOpen, setFormulaMakerOpen] = useState(false)
+  // V10.2 — reading mode: the note renders as clean read-only prose while the
+  // toolbar, title field and block editor step out of the way
+  const [reading, setReading] = useState(false)
+
+  // Esc leaves reading mode — same convention as the focus modes
+  useEffect(() => {
+    if (!reading) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setReading(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reading])
 
   // grow the title to fit — long titles wrap to more lines instead of
   // scrolling sideways and disappearing
@@ -428,35 +443,7 @@ export function EditorPane({
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
-          {/* Focus modes — full area (window only) & true fullscreen */}
-          {onEnterFocus && focusMode === 'off' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onEnterFocus('area')}
-              title="Full area — hide panels, keep the browser window"
-              aria-label="Full area view"
-            >
-              <RectangleHorizontal className="h-4 w-4" />
-            </Button>
-          )}
-          {onEnterFocus && focusMode !== 'fullscreen' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden h-8 w-8 lg:inline-flex"
-              onClick={() => onEnterFocus('fullscreen')}
-              title={
-                focusMode === 'area'
-                  ? 'Go fullscreen — also hide the browser chrome'
-                  : 'Fullscreen — hide panels & browser chrome'
-              }
-              aria-label="Enter fullscreen"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </Button>
-          )}
+          {/* Exit focus stays a direct control while a focus mode is on */}
           {onExitFocus && focusMode !== 'off' && (
             <Button
               variant="ghost"
@@ -476,71 +463,39 @@ export function EditorPane({
             </Button>
           )}
 
-          {/* Toolbar pin — keep the formatting toolbar always visible, or let
-              it slide away with the app header while scrolling for extra space */}
-          {onToggleToolbarPinned && (
+          {/* V10.2 reading view — a one-click clean read-only layout while
+              editing; hidden in focus mode, where the point is writing */}
+          {focusMode === 'off' && !reading && (
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              aria-label={
-                toolbarPinned
-                  ? 'Unpin toolbar — it will auto-hide while scrolling'
-                  : 'Pin toolbar — always visible'
-              }
-              title={
-                toolbarPinned
-                  ? 'Unpin toolbar (auto-hides while scrolling)'
-                  : 'Pin toolbar (always visible)'
-              }
-              onClick={onToggleToolbarPinned}
+              onClick={() => setReading(true)}
+              title="Reading view — clean read-only layout (Esc exits)"
+              aria-label="Enter reading view"
+              data-testid="reading-view-toggle"
             >
-              {toolbarPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+              <BookOpenText className="h-4 w-4" />
             </Button>
           )}
-
-          {/* Explicit hide — the toolbar stays hidden no matter what (scrolling
-              up, focusing the editor, switching notes, focus modes) until it
-              is explicitly shown again from this same button */}
-          {onToggleToolbarHidden && (
+          {reading && (
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              aria-label={
-                toolbarDismissed
-                  ? 'Show toolbar — bring the formatting toolbar back'
-                  : 'Hide toolbar — stays hidden until you show it again'
-              }
-              title={
-                toolbarDismissed
-                  ? 'Show toolbar (bring the formatting toolbar back)'
-                  : 'Hide toolbar (stays hidden until you show it again)'
-              }
-              onClick={onToggleToolbarHidden}
-            >
-              {toolbarDismissed ? (
-                <PanelTopOpen className="h-4 w-4" />
-              ) : (
-                <PanelTopClose className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-
-          {onPrint && (
-            <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               className="h-8 gap-1.5 px-2.5"
-              onClick={onPrint}
-              title="Print (Ctrl+P)"
+              onClick={() => setReading(false)}
+              title="Exit reading view — back to the editor (Esc)"
+              aria-label="Exit reading view"
+              data-testid="reading-exit"
             >
-              <Printer className="h-4 w-4" />
-              <span className="hidden sm:inline">Print</span>
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Edit</span>
             </Button>
           )}
 
-          {/* Note menu */}
+          {/* Note menu — everything that used to be a row of icon buttons
+              (focus modes, toolbar pin/hide, print) now lives in here, so the
+              bar itself only carries the reading toggle and this menu */}
           <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -548,7 +503,52 @@ export function EditorPane({
               <span className="sr-only">Note options</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-56">
+            {/* view & toolbar — only meaningful in the editor */}
+            {!reading && (
+              <>
+                {onEnterFocus && (
+                  <DropdownMenuItem onClick={() => onEnterFocus('area')}>
+                    <RectangleHorizontal className="h-4 w-4" /> Full area view
+                    <span className="ml-auto text-[10px] text-muted-foreground">hide panels</span>
+                  </DropdownMenuItem>
+                )}
+                {onEnterFocus && (
+                  <DropdownMenuItem
+                    className="hidden lg:flex"
+                    onClick={() => onEnterFocus('fullscreen')}
+                  >
+                    <Maximize2 className="h-4 w-4" /> Fullscreen
+                    <span className="ml-auto text-[10px] text-muted-foreground">window chrome too</span>
+                  </DropdownMenuItem>
+                )}
+                {onToggleToolbarPinned && (
+                  <DropdownMenuItem onClick={onToggleToolbarPinned}>
+                    {toolbarPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                    {toolbarPinned ? 'Unpin toolbar' : 'Pin toolbar'}
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {toolbarPinned ? 'auto-hides on scroll' : 'always visible'}
+                    </span>
+                  </DropdownMenuItem>
+                )}
+                {onToggleToolbarHidden && (
+                  <DropdownMenuItem onClick={onToggleToolbarHidden}>
+                    {toolbarDismissed ? (
+                      <PanelTopOpen className="h-4 w-4" />
+                    ) : (
+                      <PanelTopClose className="h-4 w-4" />
+                    )}
+                    {toolbarDismissed ? 'Show toolbar' : 'Hide toolbar'}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem onClick={() => onPrint?.()} disabled={!onPrint}>
+              <Printer className="h-4 w-4" /> Print
+              <span className="ml-auto text-[10px] text-muted-foreground">Ctrl+P</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => togglePin(note.id)}>
               {note.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {note.pinned ? 'Unpin note' : 'Pin note'}
@@ -571,7 +571,9 @@ export function EditorPane({
       {/* Toolbar — two fixed rows (never wraps: heights stay deterministic,
           and each row scrolls horizontally when the pane is narrow). The
           outer 0fr/1fr grid row animates to whatever the rows measure, so
-          the collapse never needs a hardcoded height. */}
+          the collapse never needs a hardcoded height. Hidden entirely while
+          reading — reading mode is chrome-free. */}
+      {!reading && (
       <div
         className={cn(
           'grid shrink-0 transition-[grid-template-rows] duration-200 ease-out',
@@ -806,15 +808,26 @@ export function EditorPane({
           </div>
         </div>
       </div>
+      )}
 
-      {/* Title — centred to a comfortable reading width in a focus mode */}
+      {/* Title — centred to a comfortable reading width in a focus mode or
+          while reading; a static heading replaces the textarea in reading
+          mode, so nothing about the note looks editable */}
       <div
         className={cn(
           'shrink-0 px-4 pt-4 md:px-6',
-          focusMode !== 'off' && 'mx-auto w-full max-w-3xl px-6',
+          (focusMode !== 'off' || reading) && 'mx-auto w-full max-w-3xl px-6',
         )}
       >
-        <textarea
+        {reading ? (
+          <h1
+            data-testid="reading-title"
+            className="block w-full px-0 py-0.5 text-xl font-bold tracking-tight md:text-2xl"
+          >
+            {note.title || 'Untitled note'}
+          </h1>
+        ) : (
+          <textarea
           ref={titleRef}
           value={note.title}
           onChange={(e) => {
@@ -831,26 +844,33 @@ export function EditorPane({
           aria-label="Note title"
           maxLength={120}
         />
+        )}
       </div>
 
-      {/* Body — WYSIWYG block editor */}
+      {/* Body — WYSIWYG block editor, or the rendered note in reading mode
+          (same scroll container, so scroll memory keeps working) */}
       <div
         ref={bodyRef}
         data-arrange-scroll
+        data-testid={reading ? 'reading-view' : undefined}
         className={cn(
           'min-h-0 flex-1 overflow-y-auto px-4 py-3 md:px-6',
-          focusMode !== 'off' && 'mx-auto w-full max-w-3xl px-6',
+          (focusMode !== 'off' || reading) && 'mx-auto w-full max-w-3xl px-6',
         )}
       >
-        <BlockEditor
-          key={note.id}
-          ref={editorRef}
-          noteId={note.id}
-          content={note.content}
-          onChange={handleContentChange}
-          onImageAction={handleImageAction}
-          onAnnotateImage={handleAnnotateImage}
-        />
+        {reading ? (
+          <MarkdownPreview content={note.content} className="pb-8" />
+        ) : (
+          <BlockEditor
+            key={note.id}
+            ref={editorRef}
+            noteId={note.id}
+            content={note.content}
+            onChange={handleContentChange}
+            onImageAction={handleImageAction}
+            onAnnotateImage={handleAnnotateImage}
+          />
+        )}
       </div>
 
       {/* Stats bar */}
