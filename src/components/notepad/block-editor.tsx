@@ -89,6 +89,9 @@ interface BlockEditorProps {
   onFormulaMaker?: () => void
   /** open the whiteboard pre-loaded with this image (annotation) */
   onAnnotateImage?: (blockId: string, src: string) => void
+  /** reports whether a block is in an active editing session — the pane uses
+   *  this to step its chrome aside for the mobile keyboard bar */
+  onActiveBlockChange?: (active: boolean) => void
 }
 
 interface SlashState {
@@ -376,7 +379,7 @@ function InlineMathLayer({
  * Typing "/" opens the quick-insert command menu.
  */
 export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
-  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onAnnotateImage }, ref) {
+  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onAnnotateImage, onActiveBlockChange }, ref) {
     const [blocks, setBlocks] = useState<Block[]>(() => parseMarkdownToBlocks(content))
     const [activeId, setActiveId] = useState<string | null>(null)
     const [slash, setSlash] = useState<SlashState | null>(null)
@@ -405,6 +408,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
     const onImageActionRef = useRef(onImageAction)
     const onFormulaMakerRef = useRef(onFormulaMaker)
     const onAnnotateImageRef = useRef(onAnnotateImage)
+    const onActiveBlockChangeRef = useRef(onActiveBlockChange)
     const flashTimerRef = useRef<number | undefined>(undefined)
 
     // keep refs in sync after every render (lint-safe: no writes during render)
@@ -416,7 +420,16 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
       onImageActionRef.current = onImageAction
       onFormulaMakerRef.current = onFormulaMaker
       onAnnotateImageRef.current = onAnnotateImage
+      onActiveBlockChangeRef.current = onActiveBlockChange
     })
+
+    // report the editing session to the pane — every activate/deactivate
+    // (focus, blur, dialog opens) lands here, so the mobile keyboard bar
+    // appears exactly while a block is being edited and unmount cleanup
+    // guarantees the pane never keeps the session alive after a note switch
+    useEffect(() => {
+      onActiveBlockChangeRef.current?.(activeId !== null)
+    }, [activeId])
 
     // ------------------------------------------------------------------
     // persistence — debounced markdown sync + flush on unmount / leave
@@ -584,17 +597,29 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
       cancelBlurDeactivate()
       setActiveSel(null) // chips show for every span until the caret is known
       setActiveId(id)
+      // report directly, not just via the activeId effect: re-focusing the
+      // SAME block (e.g. after the pane's Done button ended the bar session)
+      // leaves the state unchanged, and the bar must come back regardless
+      onActiveBlockChangeRef.current?.(true)
     }
 
     const handleBlurDeactivate = (id: string, relatedTarget: EventTarget | null) => {
       cancelBlurDeactivate()
-      // Keep the block "active" when focus moves to the formatting toolbar, a
-      // menu or a dialog — the toolbar needs to act on the block the user was
-      // just editing, and the formula maker inserts into it after closing.
+      // Keep the block "active" when focus moves to the formatting toolbar,
+      // the keyboard bar, a menu or a dialog — the toolbar needs to act on the
+      // block the user was just editing, and the formula maker inserts into it
+      // after closing.
       const rt = relatedTarget as HTMLElement | null
       if (rt && rt.closest('[role="toolbar"], [role="menu"], [role="dialog"]')) return
       blurTimerRef.current = window.setTimeout(() => {
         blurTimerRef.current = undefined
+        // Radix dropdown triggers preventDefault on pointerdown, so the blur's
+        // relatedTarget is null even though a menu is about to grab focus —
+        // re-check where focus sits NOW: inside a toolbar / open menu / dialog
+        // the session survives (this is what keeps the mobile keyboard bar up
+        // while its Formulas / Images / Heading dropdowns are in use)
+        const ae = document.activeElement as HTMLElement | null
+        if (ae && ae.closest('[role="toolbar"], [role="menu"], [role="dialog"]')) return
         setActiveId((cur) => (cur === id ? null : cur))
         setSlash((cur) => (cur && cur.id === id ? null : cur))
       }, 140)
