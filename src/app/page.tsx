@@ -12,16 +12,12 @@ import {
   GraduationCap,
   HardDrive,
   House,
-  Monitor,
-  Moon,
   Pin,
   PinOff,
   SlidersHorizontal,
-  Sun,
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -39,8 +35,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -101,8 +95,6 @@ function NotepadWorkspace({
 
   const [mobileView, setMobileView] = useState<MobileView>('tree')
   const [cheatOpen, setCheatOpen] = useState(false)
-  // the Display menu needs the raw theme preference ('light' | 'dark' | 'system')
-  const { theme, setTheme } = useTheme()
   const [clearOpen, setClearOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
   const [mdImportOpen, setMdImportOpen] = useState(false)
@@ -426,52 +418,39 @@ function NotepadWorkspace({
           >
             <House className="h-4 w-4" />
           </Button>
-          {/* Display menu — theme, header pinning and the cheat sheet grouped
-              in one dropdown instead of three separate buttons */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Display menu — theme, header & cheat sheet"
-                title="Display"
-                data-testid="display-menu"
-              >
-                {/* CSS-only swap — hydration-safe, no mounted state needed */}
-                <Sun className="hidden h-4 w-4 dark:block" />
-                <Moon className="h-4 w-4 dark:hidden" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="text-xs">Theme</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={theme ?? 'system'}
-                onValueChange={setTheme}
-              >
-                <DropdownMenuRadioItem value="light" data-testid="theme-light">
-                  <Sun className="h-4 w-4" /> Light
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="dark" data-testid="theme-dark">
-                  <Moon className="h-4 w-4" /> Dark
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="system" data-testid="theme-system">
-                  <Monitor className="h-4 w-4" /> System
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={toggleHeaderPinned} data-testid="display-pin-header">
-                {headerPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                {headerPinned ? 'Unpin header' : 'Pin header'}
-                <span className="ml-auto text-[10px] text-muted-foreground">
-                  {headerPinned ? 'always visible' : 'auto-hides on scroll'}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCheatOpen(true)} data-testid="display-cheat-sheet">
-                <BookOpen className="h-4 w-4" /> Cheat sheet
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Pin the app header so it stops auto-hiding while scrolling */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label={
+              headerPinned
+                ? 'Unpin header — it will auto-hide while scrolling'
+                : 'Pin header — always visible'
+            }
+            title={
+              headerPinned
+                ? 'Unpin header (auto-hides while scrolling)'
+                : 'Pin header (always visible)'
+            }
+            data-testid="pin-header-button"
+            onClick={toggleHeaderPinned}
+          >
+            {headerPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+          </Button>
+          {/* Formula & markdown cheat sheet — one click away */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            aria-label="Open the cheat sheet"
+            title="Cheat sheet"
+            data-testid="cheat-sheet-button"
+            onClick={() => setCheatOpen(true)}
+          >
+            <BookOpen className="h-4 w-4" />
+            <span className="hidden md:inline">Cheat sheet</span>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Data menu">

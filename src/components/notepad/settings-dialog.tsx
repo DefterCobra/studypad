@@ -8,11 +8,15 @@ import {
   Cloud,
   Gauge,
   House,
+  Monitor,
+  Moon,
   RotateCcw,
   SlidersHorizontal,
+  Sun,
   Type,
   type LucideIcon,
 } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import {
   Dialog,
   DialogContent,
@@ -79,7 +83,7 @@ const CATEGORIES: {
   {
     id: 'home',
     label: 'Home screen',
-    hint: 'Entry behaviour & all-notes list',
+    hint: 'Theme, entry behaviour & all-notes list',
     icon: House,
     tile: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
   },
@@ -103,6 +107,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const setHomeShowAllNotes = usePrefsStore((s) => s.setHomeShowAllNotes)
   const setHomeBatch = usePrefsStore((s) => s.setHomeBatch)
   const resetPrefs = usePrefsStore((s) => s.resetPrefs)
+  // the app theme ('light' | 'dark' | 'system') — lives here since the header
+  // theme button moved out of the top bar into Settings -> Home screen
+  const { theme, setTheme } = useTheme()
   // the effective V10 optimisation state — Auto resolves against the device
   const lowMemory = useLowMemoryMode()
   const cloudOn = useSyncStore((s) => s.enabled)
@@ -463,6 +470,50 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   const homePanel: ReactNode = (
     <>
+      <section data-testid="theme-control">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Theme
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground/80">
+          Light or dark across the app — System follows your device setting.
+        </p>
+        <div
+          className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+          role="radiogroup"
+          aria-label="Theme"
+        >
+          {(
+            [
+              { id: 'light', label: 'Light', icon: Sun },
+              { id: 'dark', label: 'Dark', icon: Moon },
+              { id: 'system', label: 'System', icon: Monitor },
+            ] as { id: string; label: string; icon: LucideIcon }[]
+          ).map((opt) => {
+            const selected = (theme ?? 'system') === opt.id
+            const Icon = opt.icon
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setTheme(opt.id)}
+                data-testid={`theme-${opt.id}`}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                  selected
+                    ? 'bg-background shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
       <section data-testid="continue-last-note-control">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Continue from last note
