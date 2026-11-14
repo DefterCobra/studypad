@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import {
   ArchiveRestore,
   BookOpen,
+  CheckCircle2,
   Cloud,
+  CloudAlert,
+  CloudOff,
   Database,
   Download,
   FileArchive,
@@ -12,10 +15,12 @@ import {
   GraduationCap,
   HardDrive,
   House,
+  Loader2,
   Pin,
   PinOff,
   SlidersHorizontal,
   Trash2,
+  TriangleAlert,
   Upload,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -66,9 +71,9 @@ import { UserGate } from '@/components/notepad/user-gate'
 import { UserMenu } from '@/components/notepad/user-menu'
 import { HomeScreen } from '@/components/notepad/home-screen'
 import { SyncRunner } from '@/components/notepad/sync-runner'
-import { useSyncStore } from '@/lib/notepad/sync'
+import { useSyncStore, type SyncStatus } from '@/lib/notepad/sync'
 import { SettingsDialog } from '@/components/notepad/settings-dialog'
-import { usePrefsStore } from '@/lib/prefs'
+import { useAnimationsEnabled, usePrefsStore } from '@/lib/prefs'
 
 const emptySubscribe = () => () => {}
 
@@ -130,6 +135,8 @@ function NotepadWorkspace({
   const hasHydrated = useNotepadStore((s) => s.hasHydrated)
   const tabMode = usePrefsStore((s) => s.tabMode)
   const openNoteIds = useNotepadStore((s) => s.openNoteIds)
+  // V10.3 — UI animations (Settings → Optimisation): slide/fade transitions
+  const animsOn = useAnimationsEnabled()
 
   const focusActive = focusMode !== 'off'
 
@@ -138,6 +145,25 @@ function NotepadWorkspace({
   const syncLabel = !syncEnabled
     ? 'Off'
     : { syncing: 'Syncing…', synced: 'Synced', offline: 'Offline', error: 'Error', conflict: 'Conflict', idle: 'On', off: 'On' }[syncStatus]
+  // header badge — with cloud save on it reflects the live sync state:
+  // a spinning loader while syncing, a tick once everything is synced
+  const syncBadge: {
+    Icon: typeof Cloud
+    label: string
+    iconClass?: string
+    spin?: boolean
+  } = !syncEnabled
+    ? { Icon: HardDrive, label: 'Saved locally' }
+    : {
+        off: { Icon: HardDrive, label: 'Saved locally' },
+        idle: { Icon: Cloud, label: 'Cloud on' },
+        syncing: { Icon: Loader2, label: 'Syncing…', spin: true },
+        synced: { Icon: CheckCircle2, label: 'Synced', iconClass: 'text-emerald-600 dark:text-emerald-400' },
+        offline: { Icon: CloudOff, label: 'Offline', iconClass: 'text-amber-600 dark:text-amber-400' },
+        error: { Icon: CloudAlert, label: 'Sync error', iconClass: 'text-destructive' },
+        conflict: { Icon: TriangleAlert, label: 'Conflict', iconClass: 'text-amber-600 dark:text-amber-400' },
+      }[syncStatus]
+  const SyncBadgeIcon = syncBadge.Icon
 
   // Ctrl/Cmd+P opens the customisable print dialog instead of the raw browser print
   useEffect(() => {
@@ -401,8 +427,16 @@ function NotepadWorkspace({
             <p className="text-[11px] text-muted-foreground">Notepad for studies</p>
           </div>
         </div>
-        <Badge variant="secondary" className="hidden gap-1 sm:inline-flex">
-          <HardDrive className="h-3 w-3" /> Saved locally
+        <Badge variant="secondary" className="hidden gap-1 sm:inline-flex" data-testid="sync-badge">
+          <SyncBadgeIcon
+            className={cn(
+              'h-3 w-3 shrink-0',
+              syncBadge.iconClass,
+              syncBadge.spin && 'animate-spin keep-anim',
+            )}
+            aria-hidden
+          />
+          {syncBadge.label}
         </Badge>
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -526,8 +560,14 @@ function NotepadWorkspace({
       )}
 
       {/* Panes — side-by-side replaces everything with two full-width panes;
-          in focus mode only the editor remains */}
+          in focus mode only the editor remains. The keyed wrapper replays a
+          fade/rise entrance on every view swap (home ↔ workspace ↔ side-by-side)
+          — the branches already remount, this only adds the transition. */}
       <main ref={mainRef} className="flex min-h-0 flex-1">
+        <div
+          key={homeOpen ? 'home' : sideLeft && sideRight ? 'side-by-side' : 'workspace'}
+          className={cn('flex min-h-0 flex-1', animsOn && 'anim-view-enter')}
+        >
         {homeOpen ? (
           <HomeScreen
             userId={userId}
@@ -551,7 +591,14 @@ function NotepadWorkspace({
             'w-full shrink-0 overflow-y-auto border-r bg-muted/20 lg:w-64',
             focusActive
               ? 'hidden'
-              : cn('lg:block', mobileView === 'tree' ? 'block' : 'hidden'),
+              : cn(
+                  'lg:block',
+                  mobileView === 'tree'
+                    ? animsOn
+                      ? 'block anim-view-enter'
+                      : 'block'
+                    : 'hidden',
+                ),
           )}
           aria-label="Subjects"
         >
@@ -563,7 +610,14 @@ function NotepadWorkspace({
             'w-full shrink-0 lg:w-80',
             focusActive
               ? 'hidden'
-              : cn('lg:block', mobileView === 'notes' ? 'block' : 'hidden'),
+              : cn(
+                  'lg:block',
+                  mobileView === 'notes'
+                    ? animsOn
+                      ? 'block anim-view-enter'
+                      : 'block'
+                    : 'hidden',
+                ),
           )}
           aria-label="Notes list"
         >
@@ -589,6 +643,12 @@ function NotepadWorkspace({
                 : 'Note editor'
           }
         >
+          {/* Notes / Flashcards / Quiz tab panels — the keyed wrapper replays
+              the fade/rise entrance whenever the tab strip switches */}
+          <div
+            key={chapterTab}
+            className={cn('h-full min-h-0', animsOn && 'anim-view-enter')}
+          >
           {chapterTab === 'flashcards' ? (
             <FlashcardsPane
               onBack={() => setMobileView('notes')}
@@ -622,9 +682,11 @@ function NotepadWorkspace({
               onRevealToolbar={showToolbar}
             />
           )}
+          </div>
         </section>
           </>
         )}
+        </div>
       </main>
 
       {/* Footer — hidden while a focus mode is active */}

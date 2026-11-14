@@ -63,10 +63,12 @@ export const metadata: Metadata = {
 
 /**
  * Applies saved appearance prefs (font / text size) before first paint so a
- * reload doesn't flash the default font. Mirrors src/lib/prefs.ts — keep the
- * storage key and the "default means no attribute" rule in sync.
+ * reload doesn't flash the default font, and adds the no-anim kill switch
+ * when Animations is No or Auto on a low-end device — again before first
+ * paint, so the entrance animations never flash on devices that skip them.
+ * Mirrors src/lib/prefs.ts — keep the storage key and the rules in sync.
  */
-const PREFS_BOOT = `try{var p=JSON.parse(localStorage.getItem('studypad-prefs-v1')||'{}').state||{};var d=document.documentElement;if(p.font&&p.font!=='default')d.setAttribute('data-app-font',p.font);if(p.noteSize&&p.noteSize!=='md')d.setAttribute('data-note-size',p.noteSize);}catch(e){}`;
+const PREFS_BOOT = `try{var p=JSON.parse(localStorage.getItem('studypad-prefs-v1')||'{}').state||{};var d=document.documentElement;if(p.font&&p.font!=='default')d.setAttribute('data-app-font',p.font);if(p.noteSize&&p.noteSize!=='md')d.setAttribute('data-note-size',p.noteSize);var an=p.animations,lowEnd=(navigator.deviceMemory||8)<=2||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);if(an==='no'||(an!=='yes'&&lowEnd))d.classList.add('no-anim');}catch(e){}`;
 
 const fontVars = [
   geistSans.variable,

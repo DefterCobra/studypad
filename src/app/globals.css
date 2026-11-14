@@ -746,3 +746,33 @@ figure[data-image-ui] {
 .math-caret {
   animation: math-caret-blink 1.1s step-end infinite;
 }
+
+/* ---------- UI animations (V10.3 — Settings → Optimisation → Animations) ---------- */
+/* View swaps: home ↔ workspace, notes/flashcards/quiz tab panels, the mobile
+   tree → notes → editor flow, and the side-by-side view */
+@keyframes view-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Note-tab switching: anim-slide-in-right enters from the right (moving to a
+   higher tab), anim-slide-in-left from the left (moving to a lower tab) */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.anim-view-enter { animation: view-enter 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-slide-in-right { animation: slide-in-right 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-slide-in-left { animation: slide-in-left 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Animations: No (and Auto on low-end devices) sets html.no-anim — every
+   animation and transition snaps to its end state, dialogs open instantly.
+   .keep-anim opts an element back in: the sync spinner keeps spinning even
+   with animations off, since the motion there IS the feedback. */
+html.no-anim *:not(.keep-anim) {
+  animation: none !important;
+  transition: none !important;
+}

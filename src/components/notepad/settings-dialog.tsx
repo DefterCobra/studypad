@@ -31,7 +31,7 @@ import { isConfigured } from '@/lib/notepad/sync-backends'
 import { setCloudEnabled, useSyncStore } from '@/lib/notepad/sync'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { FONT_OPTIONS, SIZE_OPTIONS, usePrefsStore, useLowMemoryMode, type FontOption, type TabMode, type PerfMode, type HomeBatch } from '@/lib/prefs'
+import { FONT_OPTIONS, SIZE_OPTIONS, useAnimationsEnabled, usePrefsStore, useLowMemoryMode, type FontOption, type TabMode, type PerfMode, type HomeBatch } from '@/lib/prefs'
 
 /** inline style so each picker row previews its own family */
 const familyStyle = (opt: FontOption) =>
@@ -76,7 +76,7 @@ const CATEGORIES: {
   {
     id: 'optimisation',
     label: 'Optimisation',
-    hint: 'Tabs, performance & loading',
+    hint: 'Tabs, performance & animations',
     icon: Gauge,
     tile: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
   },
@@ -98,6 +98,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const perfMode = usePrefsStore((s) => s.perfMode)
   const homeShowAllNotes = usePrefsStore((s) => s.homeShowAllNotes)
   const homeBatch = usePrefsStore((s) => s.homeBatch)
+  const animations = usePrefsStore((s) => s.animations)
   const setFont = usePrefsStore((s) => s.setFont)
   const setNoteSize = usePrefsStore((s) => s.setNoteSize)
   const setTabMode = usePrefsStore((s) => s.setTabMode)
@@ -106,12 +107,15 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const setPerfMode = usePrefsStore((s) => s.setPerfMode)
   const setHomeShowAllNotes = usePrefsStore((s) => s.setHomeShowAllNotes)
   const setHomeBatch = usePrefsStore((s) => s.setHomeBatch)
+  const setAnimations = usePrefsStore((s) => s.setAnimations)
   const resetPrefs = usePrefsStore((s) => s.resetPrefs)
   // the app theme ('light' | 'dark' | 'system') — lives here since the header
   // theme button moved out of the top bar into Settings -> Home screen
   const { theme, setTheme } = useTheme()
   // the effective V10 optimisation state — Auto resolves against the device
   const lowMemory = useLowMemoryMode()
+  // the effective V10.3 animations state — same Auto/Yes/No shape
+  const animsOn = useAnimationsEnabled()
   const cloudOn = useSyncStore((s) => s.enabled)
   const cloudConfig = useSyncStore((s) => s.config)
   const cloudAccount = useSyncStore((s) => s.account)
@@ -418,6 +422,58 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           {lowMemory
             ? 'Optimisations are active on this device right now.'
             : 'Optimisations are off — everything loads at once, fastest access.'}
+        </p>
+      </section>
+
+      <section data-testid="animations-control">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Animations
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground/80">
+          Slide and fade transitions when you switch tabs or move between the home
+          screen and your notes. Auto turns them off on low-memory devices (≤2&nbsp;GB)
+          and when your system asks for reduced motion.
+        </p>
+        <div
+          className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+          role="radiogroup"
+          aria-label="Animations"
+        >
+          {(
+            [
+              { id: 'auto', label: 'Auto', hint: 'Detect this device' },
+              { id: 'yes', label: 'Yes', hint: 'Always animate' },
+              { id: 'no', label: 'No', hint: 'Instant switches' },
+            ] as { id: PerfMode; label: string; hint: string }[]
+          ).map((opt) => {
+            const selected = animations === opt.id
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setAnimations(opt.id)}
+                data-testid={`anim-mode-${opt.id}`}
+                className={cn(
+                  'rounded-md px-1.5 py-1.5 text-xs font-medium transition-colors',
+                  selected
+                    ? 'bg-background shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {opt.label}
+                <span className="mt-0.5 block text-[10px] font-normal leading-tight text-muted-foreground/80">
+                  {opt.hint}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground/80" data-testid="anim-effective">
+          {animsOn
+            ? 'Animations play on this device right now.'
+            : 'Animations are off — views and tabs switch instantly.'}
         </p>
       </section>
 

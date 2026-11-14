@@ -17,6 +17,10 @@ export type TabMode = 'single' | 'multi'
 /** performance mode: Auto detects the device, Yes forces the light mode,
  *  No turns everything off for instant full-list access */
 export type PerfMode = 'auto' | 'yes' | 'no'
+/** animations mode (V10.3): Auto enables them unless the device looks low-end
+ *  or the OS asks for reduced motion; Yes always animates; No kills every
+ *  animation and transition for instant switches */
+export type AnimMode = PerfMode
 /** how many notes the home screen's all-notes list loads per batch */
 export type HomeBatch = 10 | 20
 
@@ -88,6 +92,10 @@ interface PrefsState {
   homeShowAllNotes: boolean
   /** batch size for the home all-notes list while optimising (default 10) */
   homeBatch: HomeBatch
+  /** V10.3 UI animations (default Auto): slide/fade transitions for tab
+   *  switching and the home ↔ workspace swap — Auto disables them on low-end
+   *  devices (≤2 GB RAM) and for prefers-reduced-motion users */
+  animations: AnimMode
   setFont: (font: FontId) => void
   setNoteSize: (size: NoteSizeId) => void
   setTabMode: (mode: TabMode) => void
@@ -96,6 +104,7 @@ interface PrefsState {
   setPerfMode: (mode: PerfMode) => void
   setHomeShowAllNotes: (value: boolean) => void
   setHomeBatch: (size: HomeBatch) => void
+  setAnimations: (mode: AnimMode) => void
   resetPrefs: () => void
 }
 
@@ -145,6 +154,44 @@ export function useLowMemoryMode(): boolean {
   return detected
 }
 
+/**
+ * "This device probably shouldn't animate" probe (V10.3).
+ *
+ * Auto mode disables the UI animations here — the user asked for a RAM rule:
+ * ≤2 GB devices skip every slide/fade. The OS-level prefers-reduced-motion
+ * signal (accessibility: "I don't want motion") also opts out in Auto.
+ */
+export function deviceLooksLowEnd(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const nav = navigator as Navigator & { deviceMemory?: number }
+  if (typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 && nav.deviceMemory <= 2) return true
+  try {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true
+  } catch {
+    /* very old browsers — treat as capable */
+  }
+  return false
+}
+
+/** pure resolver so non-hook contexts (the DOM applier, the boot script)
+ *  and hooks share one rule */
+export function resolveAnimationsEnabled(mode: AnimMode, lowEnd: boolean): boolean {
+  if (mode === 'yes') return true
+  if (mode === 'no') return false
+  return !lowEnd
+}
+
+/**
+ * Effective "play the UI animations" flag — Yes forces them on, No turns them
+ * all off, Auto enables them unless deviceLooksLowEnd() matched.
+ */
+export function useAnimationsEnabled(): boolean {
+  const animations = usePrefsStore((s) => s.animations)
+  // resolved once per mount — neither RAM nor the OS motion setting changes mid-session
+  const [lowEnd] = useState(() => deviceLooksLowEnd())
+  return resolveAnimationsEnabled(animations, lowEnd)
+}
+
 /** SSR-safe storage: the server render never touches localStorage */
 const storage = () =>
   typeof window === 'undefined'
@@ -162,6 +209,7 @@ export const usePrefsStore = create<PrefsState>()(
       perfMode: 'auto',
       homeShowAllNotes: true,
       homeBatch: 10,
+      animations: 'auto',
       setFont: (font) => set({ font }),
       setNoteSize: (noteSize) => set({ noteSize }),
       setTabMode: (tabMode) => set({ tabMode }),
@@ -170,6 +218,7 @@ export const usePrefsStore = create<PrefsState>()(
       setPerfMode: (perfMode) => set({ perfMode }),
       setHomeShowAllNotes: (homeShowAllNotes) => set({ homeShowAllNotes }),
       setHomeBatch: (homeBatch) => set({ homeBatch }),
+      setAnimations: (animations) => set({ animations }),
       resetPrefs: () =>
         set({
           font: 'default',
@@ -180,6 +229,7 @@ export const usePrefsStore = create<PrefsState>()(
           perfMode: 'auto',
           homeShowAllNotes: true,
           homeBatch: 10,
+          animations: 'auto',
         }),
     }),
     {

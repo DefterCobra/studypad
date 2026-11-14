@@ -1,12 +1,14 @@
 'use client'
 
+import { useRef } from 'react'
 import { useNotepadStore } from '@/lib/notepad/store'
-import { useLowMemoryMode, usePrefsStore } from '@/lib/prefs'
+import { useAnimationsEnabled, useLowMemoryMode, usePrefsStore } from '@/lib/prefs'
+import { cn } from '@/lib/utils'
 import { EditorPane, type EditorPaneProps } from './editor-pane'
 
 /**
  * Mount strategy for the note editor (V8.6 — "Optimise multi tabs", extended
- * in V10).
+ * in V10, animated in V10.3).
  *
  * - Single-tab mode: one editor bound to the store's selected note (unchanged).
  * - Multiple tabs + Optimise = Yes: only the active note's editor is mounted;
@@ -20,6 +22,10 @@ import { EditorPane, type EditorPaneProps } from './editor-pane'
  * - V10: the low-memory mode (Settings → Performance, Auto-detected on
  *   phones / tablets / ~2 GB devices) turns the optimised mounting on even
  *   when the Yes/No switch itself is still on No.
+ * - V10.3: switching tabs slides the incoming editor in the direction of the
+ *   tab it came from (higher index → from the right, lower → from the left),
+ *   unless Animations are off. In the stacked path the class lands on the
+ *   pane that just became active; re-gaining it replays the animation.
  */
 export function MultiEditorPane(props: EditorPaneProps) {
   const tabMode = usePrefsStore((s) => s.tabMode)
@@ -27,6 +33,28 @@ export function MultiEditorPane(props: EditorPaneProps) {
   const lowMemory = useLowMemoryMode()
   const openNoteIds = useNotepadStore((s) => s.openNoteIds)
   const selectedNoteId = useNotepadStore((s) => s.selectedNoteId)
+  const animsOn = useAnimationsEnabled()
+
+  // direction of the current switch, from the tab indexes — remember the
+  // previous active index in a ref adjusted during render (React's
+  // keep-previous-value pattern; StrictMode's double render is harmless:
+  // the second pass sees the same index and keeps the fallback)
+  const prevIndexRef = useRef<number | null>(null)
+  const index = selectedNoteId ? openNoteIds.indexOf(selectedNoteId) : -1
+  const prevIndex = prevIndexRef.current
+  const dir: 'left' | 'right' =
+    prevIndex !== null && prevIndex >= 0 && index >= 0 && index !== prevIndex
+      ? index > prevIndex
+        ? 'right'
+        : 'left'
+      : 'right'
+  if (index !== prevIndex) prevIndexRef.current = index
+
+  const slideClass = animsOn
+    ? dir === 'left'
+      ? 'anim-slide-in-left'
+      : 'anim-slide-in-right'
+    : undefined
 
   // the performance mode overrides the No — memory wins on small devices
   const optimise = optimiseSetting || lowMemory
@@ -35,8 +63,17 @@ export function MultiEditorPane(props: EditorPaneProps) {
   }
 
   if (optimise) {
-    // key by note id — a fresh editor per note, scroll replayed on mount
-    return <EditorPane key={selectedNoteId ?? 'none'} scrollMemory {...props} />
+    // key by note id — a fresh editor per note, scroll replayed on mount;
+    // the wrapper carries the slide entrance for the incoming note
+    return (
+      <div
+        key={selectedNoteId ?? 'none'}
+        className={cn('h-full min-h-0', slideClass)}
+        data-testid="editor-slide"
+      >
+        <EditorPane scrollMemory {...props} />
+      </div>
+    )
   }
 
   // the selected note always gets a pane, even if its tab was just closed
@@ -56,7 +93,7 @@ export function MultiEditorPane(props: EditorPaneProps) {
         return (
           <div
             key={id}
-            className="absolute inset-0"
+            className={cn('absolute inset-0', active && slideClass)}
             style={{
               // visibility (not display) keeps scroll offsets and KaTeX alive
               visibility: active ? 'visible' : 'hidden',
