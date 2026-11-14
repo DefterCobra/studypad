@@ -100,9 +100,6 @@ export interface EditorPaneProps {
   onToggleToolbarHidden?: () => void
   /** called when anything inside the pane gains focus — brings the toolbar back */
   onRevealToolbar?: () => void
-  /** bumped by the app header's Formula maker button — the editor of the
-   *  currently selected note reacts by opening its formula maker dialog */
-  formulaMakerRequest?: number
 }
 
 export function EditorPane({
@@ -121,7 +118,6 @@ export function EditorPane({
   onToggleToolbarPinned,
   onToggleToolbarHidden,
   onRevealToolbar,
-  formulaMakerRequest,
 }: EditorPaneProps) {
   const note = useNotepadStore((s) => {
     const id = noteId ?? s.selectedNoteId
@@ -143,21 +139,6 @@ export function EditorPane({
   // V10.2 — reading mode: the note renders as clean read-only prose while the
   // toolbar, title field and block editor step out of the way
   const [reading, setReading] = useState(false)
-  // app header's Formula maker button — every mounted pane sees the counter,
-  // but only the editor of the currently selected note reacts (hidden
-  // stacked panes belong to other notes). The ref starts at the incoming
-  // value so a pane remounting mid-session never replays an old request.
-  const selectedNoteId = useNotepadStore((s) => s.selectedNoteId)
-  const lastFormulaRequest = useRef(formulaMakerRequest ?? 0)
-  useEffect(() => {
-    const req = formulaMakerRequest ?? 0
-    if (!formulaMakerRequest || req === lastFormulaRequest.current) return
-    lastFormulaRequest.current = req
-    if ((noteId ?? selectedNoteId) !== selectedNoteId) return
-    // inserting needs the block editor — reading mode steps aside
-    setReading(false)
-    setFormulaMakerOpen(true)
-  }, [formulaMakerRequest, noteId, selectedNoteId])
 
   // Esc leaves reading mode — same convention as the focus modes
   useEffect(() => {
@@ -509,6 +490,24 @@ export function EditorPane({
             >
               <Pencil className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Edit</span>
+            </Button>
+          )}
+
+          {/* Formula maker — the visual equation builder lives in this pane,
+              so the button sits directly on the editor bar (edit mode only —
+              inserting needs the block editor, which reading mode replaces) */}
+          {!reading && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5"
+              onClick={() => setFormulaMakerOpen(true)}
+              title="Formula maker — build an equation visually"
+              aria-label="Open the formula maker"
+              data-testid="editor-formula-button"
+            >
+              <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="hidden sm:inline">Formula maker</span>
             </Button>
           )}
 
