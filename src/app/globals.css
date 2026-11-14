@@ -170,6 +170,13 @@ html[data-note-size='xl'] {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* safety net: the page itself never pans sideways. Every view sizes its
+       content to the viewport (home cards, editor blocks, menus scroll or
+       truncate internally); this only clips the odd one-off straggler so a
+       phone can never end up scrolled 400px into empty space. */
+    overflow-x: hidden;
+  }
   body {
     @apply bg-background text-foreground;
     /* app-wide font family (Settings → Font); code blocks keep font-mono.
@@ -336,6 +343,9 @@ html[data-note-size='xl'] {
 }
 .block-math .katex-display {
   margin: 0;
+  /* wide equations scroll inside their own block — never stretch the page
+     horizontally (phones were panning sideways to read long \ce formulas) */
+  @apply max-w-full overflow-x-auto overflow-y-hidden py-1;
 }
 .block-math .katex-display > .katex {
   white-space: normal;

@@ -801,8 +801,11 @@ export function EditorPane({
                     className="flex items-center justify-between gap-3"
                     onClick={() => insertTemplate(t.insert)}
                   >
-                    <span className="text-xs">{t.label}</span>
-                    <Latex tex={t.preview} className="text-muted-foreground" />
+                    <span className="min-w-0 truncate text-xs">{t.label}</span>
+                    <Latex
+                      tex={t.preview}
+                      className="max-w-[150px] shrink-0 overflow-hidden text-muted-foreground"
+                    />
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
@@ -815,8 +818,11 @@ export function EditorPane({
                     className="flex items-center justify-between gap-3"
                     onClick={() => insertTemplate(t.insert)}
                   >
-                    <span className="text-xs">{t.label}</span>
-                    <Latex tex={t.preview} className="text-muted-foreground" />
+                    <span className="min-w-0 truncate text-xs">{t.label}</span>
+                    <Latex
+                      tex={t.preview}
+                      className="max-w-[150px] shrink-0 overflow-hidden text-muted-foreground"
+                    />
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>

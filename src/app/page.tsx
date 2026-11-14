@@ -593,10 +593,10 @@ function NotepadWorkspace({
           in focus mode only the editor remains. The keyed wrapper replays a
           fade/rise entrance on every view swap (home ↔ workspace ↔ side-by-side)
           — the branches already remount, this only adds the transition. */}
-      <main ref={mainRef} className="flex min-h-0 flex-1">
+      <main ref={mainRef} className="flex min-h-0 min-w-0 flex-1">
         <div
           key={homeOpen ? 'home' : sideLeft && sideRight ? 'side-by-side' : 'workspace'}
-          className={cn('flex min-h-0 flex-1', animsOn && 'anim-view-enter')}
+          className={cn('flex min-h-0 min-w-0 flex-1', animsOn && 'anim-view-enter')}
         >
         {homeOpen ? (
           <HomeScreen

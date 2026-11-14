@@ -491,7 +491,11 @@ function HomeSection({
 }) {
   const items = Children.toArray(children).filter(isValidElement)
   return (
-    <section data-testid={testid} aria-label={`${title} — ${count} total, ${items.length} shown`}>
+    <section
+      className="min-w-0"
+      data-testid={testid}
+      aria-label={`${title} — ${count} total, ${items.length} shown`}
+    >
       <div className="mb-2 flex items-center gap-2 px-0.5">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
           {icon}
@@ -533,7 +537,7 @@ function PickRow({
       type="button"
       data-testid={testid}
       onClick={onClick}
-      className="flex w-full items-start gap-2.5 rounded-xl border bg-card px-3 py-2.5 text-left transition-colors hover:border-emerald-500/60 hover:bg-muted/40"
+      className="flex w-full min-w-0 items-start gap-2.5 rounded-xl border bg-card px-3 py-2.5 text-left transition-colors hover:border-emerald-500/60 hover:bg-muted/40"
     >
       {context.color && (
         <span

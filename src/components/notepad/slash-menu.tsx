@@ -175,7 +175,7 @@ export function SlashMenu({ commands, activeIndex, query, onSelect, onHover }: S
       aria-label="Insert menu"
       onMouseDown={(e) => e.preventDefault()} // keep the textarea focused
     >
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-1">
         {commands.map((cmd, i) => {
           const Icon = ICONS[cmd.icon]
           return (
@@ -209,11 +209,14 @@ export function SlashMenu({ commands, activeIndex, query, onSelect, onHover }: S
                 )}
               </span>
               {cmd.preview ? (
-                <Latex tex={cmd.preview} className="max-w-[110px] shrink-0 text-muted-foreground" />
+                <Latex
+                  tex={cmd.preview}
+                  className="max-w-[110px] shrink-0 overflow-hidden text-muted-foreground"
+                />
               ) : cmd.inline ? (
                 <Latex
                   tex={cmd.inline.replace(/^\$|\$$/g, '')}
-                  className="max-w-[110px] shrink-0 text-muted-foreground"
+                  className="max-w-[110px] shrink-0 overflow-hidden text-muted-foreground"
                 />
               ) : null}
             </button>
