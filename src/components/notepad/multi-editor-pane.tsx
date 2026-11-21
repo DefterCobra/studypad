@@ -26,6 +26,12 @@ import { EditorPane, type EditorPaneProps } from './editor-pane'
  *   tab it came from (higher index → from the right, lower → from the left),
  *   unless Animations are off. In the stacked path the class lands on the
  *   pane that just became active; re-gaining it replays the animation.
+ * - V10.3.6: every pane's BODY mounts shell-first behind a "Loading note…"
+ *   stand-in (see editor-pane), and the hidden panes are staggered 80ms
+ *   apart — opening the workspace with several persisted tabs used to run
+ *   one markdown+KaTeX pipeline per tab inside the click's single commit,
+ *   which froze the app for 1-2s. Now the active pane builds first and each
+ *   background tab gets its own slice of the main thread.
  */
 export function MultiEditorPane(props: EditorPaneProps) {
   const tabMode = usePrefsStore((s) => s.tabMode)
@@ -82,6 +88,14 @@ export function MultiEditorPane(props: EditorPaneProps) {
       ? [...openNoteIds, selectedNoteId]
       : openNoteIds
 
+  // per-pane body-build delay: the active pane at once, hidden panes 80ms
+  // apart in tab order — see the V10.3.6 note in the header comment
+  const bodyDelays = new Map<string, number>()
+  let hiddenSeen = 0
+  for (const id of ids) {
+    bodyDelays.set(id, id === selectedNoteId ? 0 : ++hiddenSeen * 80)
+  }
+
   if (ids.length === 0) {
     return <EditorPane key="none" {...props} />
   }
@@ -102,7 +116,7 @@ export function MultiEditorPane(props: EditorPaneProps) {
             aria-hidden={!active}
             data-testid={`editor-pane-for-${id}`}
           >
-            <EditorPane {...props} noteId={id} />
+            <EditorPane {...props} noteId={id} bodyLoadingDelay={bodyDelays.get(id) ?? 0} />
           </div>
         )
       })}

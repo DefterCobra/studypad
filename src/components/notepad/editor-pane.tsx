@@ -71,7 +71,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useIsDesktop } from '@/hooks/use-media-query'
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset'
 import { BlockEditor, type BlockEditorHandle } from './block-editor'
-import { DeferredLoading, useDeferredMount } from './deferred'
+import { DeferredLoading, useDeferredSurface } from './deferred'
 import { rememberScroll, recallScroll } from '@/lib/notepad/scroll-memory'
 import { autoResize, type BlockType } from '@/lib/notepad/blocks'
 import { FORMULA_TEMPLATES, unwrapTemplate, type ImageAction } from './snippets'
@@ -104,6 +104,10 @@ export interface EditorPaneProps {
   onToggleToolbarHidden?: () => void
   /** called when anything inside the pane gains focus — brings the toolbar back */
   onRevealToolbar?: () => void
+  /** stagger this pane's body build (multi-tab grid background panes) — the
+   *  active pane builds right after the chrome paints, hidden ones follow at
+   *  increasing delays so N persisted tabs never pipeline in one commit */
+  bodyLoadingDelay?: number
 }
 
 export function EditorPane({
@@ -122,6 +126,7 @@ export function EditorPane({
   onToggleToolbarPinned,
   onToggleToolbarHidden,
   onRevealToolbar,
+  bodyLoadingDelay = 0,
 }: EditorPaneProps) {
   const note = useNotepadStore((s) => {
     const id = noteId ?? s.selectedNoteId
@@ -146,7 +151,15 @@ export function EditorPane({
   // reading view swaps the whole editor for a full-document markdown render —
   // shell-first so the toggle paints instantly, the pipeline lands 2 frames
   // later behind a loading stand-in instead of freezing the click's frame
-  const readingReady = useDeferredMount(reading)
+  // (keyed to the note id, so switching notes while reading re-gates too)
+  const readingReady = useDeferredSurface(reading && note ? note.id : null)
+  // edit body — the same shell-first path for every fresh note surface.
+  // Opening a note used to run the whole markdown+KaTeX pipeline inside the
+  // click's commit (per pane in the multi-tab grid — one click with several
+  // persisted tabs froze the app for 1-2s). Now the chrome paints in the
+  // click's frame and the blocks build two frames later behind a "Loading
+  // note…" stand-in; background panes are staggered by the grid instead.
+  const editBodyReady = useDeferredSurface(reading || !note ? null : note.id, bodyLoadingDelay)
 
   // ------------------------------------------------------------------
   // V10.3.4 — mobile keyboard bar (Obsidian-style)
@@ -822,7 +835,7 @@ export function EditorPane({
           ) : (
             <DeferredLoading label="Rendering the note…" />
           )
-        ) : (
+        ) : editBodyReady ? (
           <BlockEditor
             key={note.id}
             ref={editorRef}
@@ -835,6 +848,8 @@ export function EditorPane({
             onActiveBlockChange={setBlockEditing}
             onRenderSettled={replayScrollOnSettle}
           />
+        ) : (
+          <DeferredLoading label="Loading note…" testId="note-loading" />
         )}
         {/* while the keyboard bar is up, give the scroll container extra room
             below the last block so the caret never hides behind the bar when
