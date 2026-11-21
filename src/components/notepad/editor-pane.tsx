@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   ArrowDownToLine,
@@ -71,6 +71,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useIsDesktop } from '@/hooks/use-media-query'
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset'
 import { BlockEditor, type BlockEditorHandle } from './block-editor'
+import { DeferredLoading, useDeferredMount } from './deferred'
 import { rememberScroll, recallScroll } from '@/lib/notepad/scroll-memory'
 import { autoResize, type BlockType } from '@/lib/notepad/blocks'
 import { FORMULA_TEMPLATES, unwrapTemplate, type ImageAction } from './snippets'
@@ -142,6 +143,10 @@ export function EditorPane({
   // V10.2 — reading mode: the note renders as clean read-only prose while the
   // toolbar, title field and block editor step out of the way
   const [reading, setReading] = useState(false)
+  // reading view swaps the whole editor for a full-document markdown render —
+  // shell-first so the toggle paints instantly, the pipeline lands 2 frames
+  // later behind a loading stand-in instead of freezing the click's frame
+  const readingReady = useDeferredMount(reading)
 
   // ------------------------------------------------------------------
   // V10.3.4 — mobile keyboard bar (Obsidian-style)
@@ -232,6 +237,16 @@ export function EditorPane({
       cancelAnimationFrame(raf1)
       cancelAnimationFrame(raf2)
     }
+  }, [scrollMemory, activeNoteId])
+
+  // staged rendering in the block editor changes the note's height over the
+  // first few hundred ms — replay the saved offset once the tail has mounted,
+  // so a deep scroll offset survives the (now non-blocking) opening
+  const replayScrollOnSettle = useCallback(() => {
+    if (!scrollMemory || !activeNoteId) return
+    const el = bodyRef.current
+    if (!el) return
+    el.scrollTop = recallScroll(activeNoteId) ?? el.scrollTop
   }, [scrollMemory, activeNoteId])
 
   const chapter = note ? chapters.find((c) => c.id === note.chapterId) : null
@@ -802,7 +817,11 @@ export function EditorPane({
         )}
       >
         {reading ? (
-          <MarkdownPreview content={note.content} className="pb-8" />
+          readingReady ? (
+            <MarkdownPreview content={note.content} className="pb-8" />
+          ) : (
+            <DeferredLoading label="Rendering the note…" />
+          )
         ) : (
           <BlockEditor
             key={note.id}
@@ -814,6 +833,7 @@ export function EditorPane({
             onFormulaMaker={() => setFormulaMakerOpen(true)}
             onAnnotateImage={handleAnnotateImage}
             onActiveBlockChange={setBlockEditing}
+            onRenderSettled={replayScrollOnSettle}
           />
         )}
         {/* while the keyboard bar is up, give the scroll container extra room

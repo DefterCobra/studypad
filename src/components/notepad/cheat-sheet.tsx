@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Latex } from './markdown-preview'
+import { DeferredLoading, useDeferredMount } from './deferred'
 
 interface CheatSheetProps {
   open: boolean
@@ -74,6 +75,9 @@ const MD_ROWS: CheatRow[] = [
 ]
 
 export function CheatSheet({ open, onOpenChange }: CheatSheetProps) {
+  // ~40 KaTeX previews across the three tabs — shell first, previews two
+  // frames later behind a loading stand-in
+  const ready = useDeferredMount(open)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
@@ -98,37 +102,43 @@ export function CheatSheet({ open, onOpenChange }: CheatSheetProps) {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="chem" className="mt-3">
-            <p className="mb-3 text-xs text-muted-foreground">
-              Wrap chemistry in <code className="rounded bg-muted px-1 py-0.5">{'\\ce{…}'}</code>{' '}
-              inside <code className="rounded bg-muted px-1 py-0.5">$…$</code>.
-            </p>
-            <div className="space-y-2">
-              {CHEM_ROWS.map((row) => (
-                <CheatRowView key={row.syntax} row={row} />
-              ))}
-            </div>
-          </TabsContent>
+          {ready ? (
+            <>
+              <TabsContent value="chem" className="mt-3">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Wrap chemistry in <code className="rounded bg-muted px-1 py-0.5">{'\\ce{…}'}</code>{' '}
+                  inside <code className="rounded bg-muted px-1 py-0.5">$…$</code>.
+                </p>
+                <div className="space-y-2">
+                  {CHEM_ROWS.map((row) => (
+                    <CheatRowView key={row.syntax} row={row} />
+                  ))}
+                </div>
+              </TabsContent>
 
-          <TabsContent value="math" className="mt-3">
-            <p className="mb-3 text-xs text-muted-foreground">
-              Wrap LaTeX in <code className="rounded bg-muted px-1 py-0.5">$…$</code> (inline) or{' '}
-              <code className="rounded bg-muted px-1 py-0.5">{'$$…$$'}</code> (centered block).
-            </p>
-            <div className="space-y-2">
-              {MATH_ROWS.map((row) => (
-                <CheatRowView key={row.syntax} row={row} />
-              ))}
-            </div>
-          </TabsContent>
+              <TabsContent value="math" className="mt-3">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Wrap LaTeX in <code className="rounded bg-muted px-1 py-0.5">$…$</code> (inline) or{' '}
+                  <code className="rounded bg-muted px-1 py-0.5">{'$$…$$'}</code> (centered block).
+                </p>
+                <div className="space-y-2">
+                  {MATH_ROWS.map((row) => (
+                    <CheatRowView key={row.syntax} row={row} />
+                  ))}
+                </div>
+              </TabsContent>
 
-          <TabsContent value="md" className="mt-3">
-            <div className="space-y-2">
-              {MD_ROWS.map((row) => (
-                <CheatRowView key={row.syntax} row={row} />
-              ))}
-            </div>
-          </TabsContent>
+              <TabsContent value="md" className="mt-3">
+                <div className="space-y-2">
+                  {MD_ROWS.map((row) => (
+                    <CheatRowView key={row.syntax} row={row} />
+                  ))}
+                </div>
+              </TabsContent>
+            </>
+          ) : (
+            <DeferredLoading label="Loading the cheat sheet…" />
+          )}
         </Tabs>
       </DialogContent>
     </Dialog>

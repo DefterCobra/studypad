@@ -32,6 +32,7 @@ import {
   type PaperId,
 } from '@/lib/notepad/print'
 import { PrintBody } from './print-body'
+import { DeferredLoading, useDeferredMount } from './deferred'
 
 interface PrintDialogProps {
   open: boolean
@@ -61,6 +62,11 @@ export function PrintDialog({ open, onOpenChange }: PrintDialogProps) {
   const [zoomMode, setZoomMode] = useState<ZoomMode>('fit')
   const [tick, setTick] = useState(0)
   const [printing, setPrinting] = useState(false)
+  // the preview renders the whole note through the markdown+KaTeX pipeline and
+  // then re-measures every block for pagination — heavy. The dialog frame and
+  // the settings column paint instantly; the preview builds two frames later
+  // behind a loading stand-in, off the open click's frame.
+  const previewReady = useDeferredMount(open)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLDivElement>(null)
@@ -90,7 +96,7 @@ export function PrintDialog({ open, onOpenChange }: PrintDialogProps) {
 
   // paginate the note (real page breaks) and build the preview sheets
   useEffect(() => {
-    if (!open || !note) return
+    if (!open || !previewReady || !note) return
     const raf = requestAnimationFrame(() => {
       const measure = measureRef.current
       const stack = stackRef.current
@@ -218,7 +224,7 @@ export function PrintDialog({ open, onOpenChange }: PrintDialogProps) {
       }
     })
     return () => cancelAnimationFrame(raf)
-  }, [open, note, settings, paperW, paperH, marginPx, contentW, contentH, zoomMode, tick])
+  }, [open, previewReady, note, settings, paperW, paperH, marginPx, contentW, contentH, zoomMode, tick])
 
   if (!note) return null
 
@@ -410,15 +416,22 @@ export function PrintDialog({ open, onOpenChange }: PrintDialogProps) {
               </span>
             </div>
             <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-muted/50 p-4 md:p-6">
-              {/* hidden measurement render at true page width */}
+              {/* hidden measurement render at true page width — mounts with the
+                  deferred preview; the pagination effect waits for it */}
               <div
                 ref={measureRef}
                 aria-hidden
                 className="print-measure"
                 style={{ width: `${contentW}px` }}
               >
-                <PrintBody note={note} subject={subject} chapter={chapter} settings={settings} />
+                {previewReady && (
+                  <PrintBody note={note} subject={subject} chapter={chapter} settings={settings} />
+                )}
               </div>
+              {/* loading stand-in while the preview pipeline builds itself */}
+              {!previewReady && (
+                <DeferredLoading label="Building the print preview…" className="h-64" />
+              )}
               {/* visible paginated sheets */}
               <div
                 ref={stackRef}

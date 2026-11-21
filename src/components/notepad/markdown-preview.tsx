@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -208,7 +208,11 @@ function TocNav({ entries }: { entries: TocEntry[] }) {
  * A `[TOC]` line renders as an auto-generated, hyperlinked table of contents
  * built from every H1–H3 heading in the document.
  */
-export function MarkdownPreview({
+// memo: the unified (remark + rehype + KaTeX) pipeline is the most expensive
+// thing in the app — without it every unrelated re-render of a parent (a
+// keystroke elsewhere in the note, a store update) re-runs the whole parse
+// for unchanged content. With it, a re-render costs a prop comparison.
+export const MarkdownPreview = memo(function MarkdownPreview({
   content,
   className,
   prepend,
@@ -268,15 +272,19 @@ export function MarkdownPreview({
       </ReactMarkdown>
     </div>
   )
-}
+})
 
 /**
  * Renders a single line of inline markdown (bold, links, `code`, $math$) without
  * block margins. Typography (font-size / line-height) is INHERITED from the
  * enclosing block — headings keep their heading size, list items the note size —
  * so never set a font-size here.
+ *
+ * memo: this runs one full ReactMarkdown pipeline per rendered text block, so
+ * it must never re-run just because a sibling block was edited — with memo,
+ * typing re-renders only the block whose text actually changed.
  */
-export function InlineMarkdown({ text }: { text: string }) {
+export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: string }) {
   return (
     <span className="block-inline">
       <ReactMarkdown
@@ -290,10 +298,23 @@ export function InlineMarkdown({ text }: { text: string }) {
       </ReactMarkdown>
     </span>
   )
-}
+})
 
-/** Renders a single LaTeX/chemistry string, e.g. `\ce{2H2 + O2 -> 2H2O}` */
-export function Latex({ tex, display = false, className }: { tex: string; display?: boolean; className?: string }) {
+/**
+ * Renders a single LaTeX/chemistry string, e.g. `\ce{2H2 + O2 -> 2H2O}`.
+ *
+ * memo: katex.renderToString is synchronous CPU work — without memo, typing
+ * in one block re-typeset every equation block in the note on each commit.
+ */
+export const Latex = memo(function Latex({
+  tex,
+  display = false,
+  className,
+}: {
+  tex: string
+  display?: boolean
+  className?: string
+}) {
   const html = useMemo(() => {
     try {
       return katex.renderToString(tex, {
@@ -307,4 +328,4 @@ export function Latex({ tex, display = false, className }: { tex: string; displa
     }
   }, [tex, display])
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
-}
+})

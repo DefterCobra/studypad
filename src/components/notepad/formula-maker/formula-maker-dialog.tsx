@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { FormulaToken } from '@/lib/notepad/formula/tokens'
 import type { MathToken } from '@/lib/notepad/formula/math-tokens'
+import { DeferredLoading, useDeferredMount } from '../deferred'
 import { ChemistryEditor } from './chemistry-editor'
 import { MathEditor } from './math-editor'
 
@@ -23,10 +24,20 @@ interface FormulaMakerDialogProps {
  *
  * Token state lives HERE (outside the Radix portal) so a half-built formula
  * survives the dialog being closed and reopened.
+ *
+ * Perceived performance (V10.3.5): the periodic table + math keyboard are the
+ * heaviest dialog content in the app, so the open is shell-first — the frame,
+ * title and tabs paint in the click's own commit, and the editors mount two
+ * frames later behind a loading stand-in instead of freezing the click's
+ * frame for seconds. (The content itself unmounts with the dialog on close —
+ * with no exit animation that teardown is instant and cheap; keeping it
+ * force-mounted would leave Radix's scroll lock and pointer-event guard
+ * active while closed, which freezes the whole app.)
  */
 export function FormulaMakerDialog({ open, onOpenChange, onInsert }: FormulaMakerDialogProps) {
   const [tokens, setTokens] = useState<FormulaToken[]>([])
   const [mathTokens, setMathTokens] = useState<MathToken[]>([])
+  const ready = useDeferredMount(open)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -61,11 +72,19 @@ export function FormulaMakerDialog({ open, onOpenChange, onInsert }: FormulaMake
           </div>
 
           <TabsContent value="chemistry" className="mt-0 flex min-h-0 flex-1 flex-col">
-            <ChemistryEditor tokens={tokens} onTokensChange={setTokens} onInsert={onInsert} />
+            {ready ? (
+              <ChemistryEditor tokens={tokens} onTokensChange={setTokens} onInsert={onInsert} />
+            ) : (
+              <DeferredLoading label="Loading the formula maker…" />
+            )}
           </TabsContent>
 
           <TabsContent value="math" className="mt-0 flex min-h-0 flex-1 flex-col">
-            <MathEditor tokens={mathTokens} onTokensChange={setMathTokens} onInsert={onInsert} />
+            {ready ? (
+              <MathEditor tokens={mathTokens} onTokensChange={setMathTokens} onInsert={onInsert} />
+            ) : (
+              <DeferredLoading label="Loading the formula maker…" />
+            )}
           </TabsContent>
         </Tabs>
       </DialogContent>

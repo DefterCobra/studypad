@@ -19,6 +19,7 @@ import {
   Copy,
   GripVertical,
   ListTree,
+  Loader2,
   MoveVertical,
   PenTool,
   Plus,
@@ -92,6 +93,9 @@ interface BlockEditorProps {
   /** reports whether a block is in an active editing session — the pane uses
    *  this to step its chrome aside for the mobile keyboard bar */
   onActiveBlockChange?: (active: boolean) => void
+  /** all deferred blocks have mounted (staged rendering caught up) — the pane
+   *  replays scroll memory after this, since heights changed meanwhile */
+  onRenderSettled?: () => void
 }
 
 interface SlashState {
@@ -100,6 +104,13 @@ interface SlashState {
   query: string
   index: number
 }
+
+// staged rendering — how many blocks paint in the opening click's commit and
+// how many mount per idle slice afterwards (only engaged past the threshold,
+// so a normal note renders whole and only genuinely long ones stage)
+const STAGED_INITIAL = 10
+const STAGED_CHUNK = 16
+const STAGED_THRESHOLD = 18
 
 const TYPO: Partial<Record<BlockType, string>> = {
   p: 'text-(length:--note-font-size) leading-7',
@@ -379,8 +390,21 @@ function InlineMathLayer({
  * Typing "/" opens the quick-insert command menu.
  */
 export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
-  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onAnnotateImage, onActiveBlockChange }, ref) {
+  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onAnnotateImage, onActiveBlockChange, onRenderSettled }, ref) {
     const [blocks, setBlocks] = useState<Block[]>(() => parseMarkdownToBlocks(content))
+    // ------------------------------------------------------------------
+    // staged rendering — the perceived-speed lever for long notes
+    //
+    // Opening a note used to build EVERY block's markdown+KaTeX pipeline in
+    // the opening click's commit, which on a long note froze the frame for
+    // seconds. Now the first blocks paint at once, the rest mount in idle
+    // slices behind a loading row, and any interaction targeting a hidden
+    // block (activate, ToC jump) reveals everything immediately. Small notes
+    // never engage the staging at all.
+    // ------------------------------------------------------------------
+    const [renderLimit, setRenderLimit] = useState(() =>
+      Math.min(blocks.length, blocks.length > STAGED_THRESHOLD ? STAGED_INITIAL : blocks.length),
+    )
     const [activeId, setActiveId] = useState<string | null>(null)
     const [slash, setSlash] = useState<SlashState | null>(null)
     const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -409,6 +433,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
     const onFormulaMakerRef = useRef(onFormulaMaker)
     const onAnnotateImageRef = useRef(onAnnotateImage)
     const onActiveBlockChangeRef = useRef(onActiveBlockChange)
+    const onRenderSettledRef = useRef(onRenderSettled)
     const flashTimerRef = useRef<number | undefined>(undefined)
 
     // keep refs in sync after every render (lint-safe: no writes during render)
@@ -421,7 +446,58 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
       onFormulaMakerRef.current = onFormulaMaker
       onAnnotateImageRef.current = onAnnotateImage
       onActiveBlockChangeRef.current = onActiveBlockChange
+      onRenderSettledRef.current = onRenderSettled
     })
+
+    // ---- staged rendering: grow the rendered range in idle slices ----
+    const renderSettled = renderLimit >= blocks.length
+    const renderSettledRef = useRef(true)
+    useEffect(() => {
+      if (renderSettled) {
+        // the moment the last chunk lands, let the pane replay scroll memory
+        // (heights changed since it first tried, right after mount)
+        if (!renderSettledRef.current) onRenderSettledRef.current?.()
+        renderSettledRef.current = true
+        return
+      }
+      renderSettledRef.current = false
+      let cancelled = false
+      let idleHandle = 0
+      let timer = 0
+      const grow = () => {
+        if (cancelled) return
+        setRenderLimit((cur) => Math.min(blocksRef.current.length, cur + STAGED_CHUNK))
+      }
+      const schedule = () => {
+        const w = window as Window & {
+          requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+          cancelIdleCallback?: (handle: number) => void
+        }
+        if (typeof w.requestIdleCallback === 'function') {
+          idleHandle = w.requestIdleCallback(grow, { timeout: 240 })
+        } else {
+          timer = window.setTimeout(grow, 48)
+        }
+      }
+      schedule()
+      return () => {
+        cancelled = true
+        if (idleHandle) {
+          const w = window as Window & { cancelIdleCallback?: (handle: number) => void }
+          w.cancelIdleCallback?.(idleHandle)
+        }
+        if (timer) window.clearTimeout(timer)
+      }
+    }, [renderSettled, renderLimit, blocks.length])
+
+    /** reveal everything at once — for interactions that target a block the
+     *  staging may not have reached yet (activation, ToC jumps, inserts) */
+    const revealAllBlocks = useCallback(() => {
+      setRenderLimit((cur) => {
+        const total = blocksRef.current.length
+        return cur >= total ? cur : total
+      })
+    }, [])
 
     // report the editing session to the pane — every activate/deactivate
     // (focus, blur, dialog opens) lands here, so the mobile keyboard bar
@@ -507,6 +583,9 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
         serializedRef.current = serializeBlocks(parsed)
         blocksRef.current = parsed
         setBlocks(parsed)
+        setRenderLimit(
+          Math.min(parsed.length, parsed.length > STAGED_THRESHOLD ? STAGED_INITIAL : parsed.length),
+        )
         setActiveId(null)
         setSlash(null)
       }, 0)
@@ -626,6 +705,9 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
     }
 
     const activate = (id: string, caret: 'start' | 'end' | number = 'end') => {
+      // the staging may not have reached this block yet — reveal everything
+      // first so the focus call can find its textarea
+      revealAllBlocks()
       cancelBlurDeactivate()
       setActiveId(id)
       focusBlock(id, caret)
@@ -823,14 +905,21 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
 
     /** jump to a heading block: smooth-scroll it into view and flash it */
     const scrollToBlock = (id: string) => {
-      const el = document.querySelector(`[data-block-id="${id}"]`)
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // the target may sit beyond the staged range — the reveal commits after
+      // this handler returns (discrete-event flush), so the jump rides the
+      // next frame, once the block actually exists in the DOM
+      revealAllBlocks()
       setFlashId(id)
       if (flashTimerRef.current !== undefined) window.clearTimeout(flashTimerRef.current)
       flashTimerRef.current = window.setTimeout(() => {
         flashTimerRef.current = undefined
         setFlashId(null)
       }, 1800)
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-block-id="${id}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
     }
 
     /** presentational ToC block — entries are clickable, content auto-updates */
@@ -2128,7 +2217,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
           </div>
         )}
         <div className="pb-2">
-          {blocks.map((block, idx) => {
+          {blocks.slice(0, renderLimit).map((block, idx) => {
             const editing = activeId === block.id
             const gutterVisible = editing || arranging
             return (
@@ -2247,6 +2336,20 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
             )
           })}
         </div>
+
+        {/* staged rendering: the tail of a long note mounts in idle slices —
+            show what is happening instead of a frozen frame */}
+        {!renderSettled && (
+          <div
+            data-testid="blocks-loading"
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-2 py-3 text-xs text-muted-foreground"
+          >
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin keep-anim" aria-hidden />
+            Rendering the rest of the note…
+          </div>
+        )}
 
         {/* click-to-append zone; in arrange mode it doubles as the "move to end" target */}
         <div
