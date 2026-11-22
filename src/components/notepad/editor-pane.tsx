@@ -78,6 +78,7 @@ import { FORMULA_TEMPLATES, unwrapTemplate, type ImageAction } from './snippets'
 import { Latex, MarkdownPreview } from './markdown-preview'
 import { Whiteboard } from './whiteboard'
 import { FormulaMakerDialog } from './formula-maker/formula-maker-dialog'
+import { TableMakerDialog } from './table-maker/table-maker-dialog'
 import { LARGE_IMAGE_BYTES, formatBytes, processImageFile } from '@/lib/notepad/image'
 
 export interface EditorPaneProps {
@@ -145,6 +146,11 @@ export function EditorPane({
   const [whiteboardInitial, setWhiteboardInitial] = useState<string | null>(null)
   const [annotateTargetId, setAnnotateTargetId] = useState<string | null>(null)
   const [formulaMakerOpen, setFormulaMakerOpen] = useState(false)
+  // V10.4 — table maker: same pane-owned full-screen dialog contract. The
+  // initial markdown is non-null when the toolbar button was clicked while a
+  // table block was active — Insert then REPLACES that block in place.
+  const [tableMakerOpen, setTableMakerOpen] = useState(false)
+  const [tableMakerInitial, setTableMakerInitial] = useState<string | null>(null)
   // V10.2 — reading mode: the note renders as clean read-only prose while the
   // toolbar, title field and block editor step out of the way
   const [reading, setReading] = useState(false)
@@ -333,6 +339,24 @@ export function EditorPane({
     })
   }
 
+  // ---------- table maker: visual table builder ----------
+
+  const openTableMaker = () => {
+    // remembers the target position (and returns the active block's markdown
+    // when that block is a table — the edit-in-place session)
+    setTableMakerInitial(editorRef.current?.beginTableSession() ?? null)
+    setTableMakerOpen(true)
+  }
+
+  const handleTableMakerInsert = (markdown: string) => {
+    editorRef.current?.insertTableBlock(markdown)
+    setTableMakerOpen(false)
+    toast({
+      title: 'Table inserted',
+      description: 'Your table was added to the note as a markdown table.',
+    })
+  }
+
   // ---------- image flows: upload / clipboard / whiteboard ----------
 
   const warnIfLarge = (results: { bytes: number }[]) => {
@@ -464,7 +488,11 @@ export function EditorPane({
   // one source of truth for the editor options: the two-row desktop toolbar
   // and the single-row mobile keyboard bar render the very same controls
   const formatControls = (
-    <FormatControls onWrap={tryWrap} onTransform={(t) => editorRef.current?.transformActive(t)} />
+    <FormatControls
+      onWrap={tryWrap}
+      onTransform={(t) => editorRef.current?.transformActive(t)}
+      onTableMaker={openTableMaker}
+    />
   )
   const insertControls = (
     <InsertControls
@@ -609,6 +637,24 @@ export function EditorPane({
             >
               <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               <span className="hidden sm:inline">Formula maker</span>
+            </Button>
+          )}
+
+          {/* Table maker — the visual grid builder, same pane-owned contract
+              (edit mode only; clicking it while a table block is active opens
+              that table for editing in place) */}
+          {!reading && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5"
+              onClick={openTableMaker}
+              title="Table maker — build a table visually"
+              aria-label="Open the table maker"
+              data-testid="editor-table-button"
+            >
+              <Table className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+              <span className="hidden md:inline">Table maker</span>
             </Button>
           )}
 
@@ -844,6 +890,7 @@ export function EditorPane({
             onChange={handleContentChange}
             onImageAction={handleImageAction}
             onFormulaMaker={() => setFormulaMakerOpen(true)}
+            onTableMaker={openTableMaker}
             onAnnotateImage={handleAnnotateImage}
             onActiveBlockChange={setBlockEditing}
             onRenderSettled={replayScrollOnSettle}
@@ -926,6 +973,21 @@ export function EditorPane({
           if (!open) editorRef.current?.clearPendingFormula()
         }}
         onInsert={handleFormulaMakerInsert}
+      />
+
+      {/* Table maker — full-screen visual table builder */}
+      <TableMakerDialog
+        open={tableMakerOpen}
+        initialMarkdown={tableMakerInitial}
+        onOpenChange={(open) => {
+          setTableMakerOpen(open)
+          // closed without inserting — forget where the / or + menu was opened
+          if (!open) {
+            editorRef.current?.clearPendingTable()
+            setTableMakerInitial(null)
+          }
+        }}
+        onInsert={handleTableMakerInsert}
       />
 
       {/* Whiteboard — draw & insert (also used to annotate images) */}
@@ -1018,9 +1080,12 @@ function ToolbarButton({
 function FormatControls({
   onWrap,
   onTransform,
+  onTableMaker,
 }: {
   onWrap: (prefix: string, suffix: string, placeholder: string) => void
   onTransform: (type: BlockType) => void
+  /** opens the table maker dialog (shared with the mobile keyboard bar) */
+  onTableMaker: () => void
 }) {
   return (
     <>
@@ -1080,7 +1145,7 @@ function FormatControls({
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 
-      <ToolbarButton label="Table" onClick={() => onTransform('table')}>
+      <ToolbarButton label="Table maker — build a table visually" onClick={onTableMaker}>
         <Table className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton label="Code block" onClick={() => onTransform('code')}>

@@ -66,6 +66,15 @@ export interface BlockEditorHandle {
   insertFormulaBlock: (tex: string) => void
   /** forget the remembered formula position (formula maker closed unused) */
   clearPendingFormula: () => void
+  /** remember where the table maker's output goes, and report the source of
+   *  the active table block (edit-in-place) or null (fresh insert) — called
+   *  right before the pane opens the dialog */
+  beginTableSession: () => string | null
+  /** insert a table built in the table maker at the remembered position, or
+   *  replace the remembered table block (edit-in-place) */
+  insertTableBlock: (markdown: string) => void
+  /** forget the remembered table position (table maker closed unused) */
+  clearPendingTable: () => void
   /** insert `$tex$` at the caret of the active text block, or fall back to an equation block */
   insertInlineOrBlock: (tex: string) => void
   /** wrap the current textarea selection with markers — returns false when no text block is active */
@@ -88,6 +97,9 @@ interface BlockEditorProps {
   onImageAction?: (kind: ImageAction) => void
   /** open the visual formula maker (slash / + menu item) — the pane owns the dialog */
   onFormulaMaker?: () => void
+  /** open the visual table maker (slash / + menu item, toolbar table button) —
+   *  the pane owns the dialog */
+  onTableMaker?: () => void
   /** open the whiteboard pre-loaded with this image (annotation) */
   onAnnotateImage?: (blockId: string, src: string) => void
   /** reports whether a block is in an active editing session — the pane uses
@@ -390,7 +402,7 @@ function InlineMathLayer({
  * Typing "/" opens the quick-insert command menu.
  */
 export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
-  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onAnnotateImage, onActiveBlockChange, onRenderSettled }, ref) {
+  function BlockEditor({ noteId, content, onChange, onImageAction, onFormulaMaker, onTableMaker, onAnnotateImage, onActiveBlockChange, onRenderSettled }, ref) {
     const [blocks, setBlocks] = useState<Block[]>(() => parseMarkdownToBlocks(content))
     // ------------------------------------------------------------------
     // staged rendering — the perceived-speed lever for long notes
@@ -429,8 +441,10 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
     const blurTimerRef = useRef<number | undefined>(undefined)
     const pendingImageRef = useRef<{ replaceId?: string; afterId?: string } | null>(null)
     const pendingFormulaRef = useRef<{ replaceId?: string; afterId?: string } | null>(null)
+    const pendingTableRef = useRef<{ replaceId?: string; afterId?: string } | null>(null)
     const onImageActionRef = useRef(onImageAction)
     const onFormulaMakerRef = useRef(onFormulaMaker)
+    const onTableMakerRef = useRef(onTableMaker)
     const onAnnotateImageRef = useRef(onAnnotateImage)
     const onActiveBlockChangeRef = useRef(onActiveBlockChange)
     const onRenderSettledRef = useRef(onRenderSettled)
@@ -444,6 +458,7 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
       onChangeRef.current = onChange
       onImageActionRef.current = onImageAction
       onFormulaMakerRef.current = onFormulaMaker
+      onTableMakerRef.current = onTableMaker
       onAnnotateImageRef.current = onAnnotateImage
       onActiveBlockChangeRef.current = onActiveBlockChange
       onRenderSettledRef.current = onRenderSettled
@@ -1090,6 +1105,19 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
         return
       }
 
+      // ---- table maker: same remembered-position contract as the formula
+      // maker — the pane opens its dialog and inserts (or replaces) later ----
+      if (cmd.tableMaker) {
+        if (stripped !== target.text) setBlockText(targetId, stripped)
+        pendingTableRef.current =
+          target.type === 'p' && stripped.trim() === ''
+            ? { replaceId: targetId }
+            : { afterId: targetId }
+        setActiveId(null)
+        onTableMakerRef.current?.()
+        return
+      }
+
       if (!cmd.blockType) return
       const type = cmd.blockType
 
@@ -1473,6 +1501,62 @@ export const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(
         },
         clearPendingFormula: () => {
           pendingFormulaRef.current = null
+        },
+        beginTableSession: () => {
+          const id = activeIdRef.current
+          const b = id ? blocksRef.current.find((x) => x.id === id) : undefined
+          if (b && b.type === 'table') {
+            // editing an existing table in place
+            pendingTableRef.current = { replaceId: b.id }
+            return b.text
+          }
+          if (b && b.type === 'p' && b.text.trim() === '') {
+            pendingTableRef.current = { replaceId: b.id }
+            return null
+          }
+          pendingTableRef.current = id ? { afterId: id } : null
+          return null
+        },
+        insertTableBlock: (markdown: string) => {
+          const pending = pendingTableRef.current
+          pendingTableRef.current = null
+          // remembered position (slash flow) or remembered table (edit flow)
+          if (pending?.replaceId) {
+            const b = blocksRef.current.find((x) => x.id === pending.replaceId)
+            if (b) {
+              if (b.type === 'table') {
+                setBlockText(b.id, markdown)
+              } else {
+                transformBlock(b.id, 'table', markdown)
+              }
+              cancelBlurDeactivate()
+              setActiveId(b.id)
+              return
+            }
+          }
+          if (pending?.afterId && blocksRef.current.some((b) => b.id === pending.afterId)) {
+            const nb = insertBlockAfter(pending.afterId, createBlock('table', markdown))
+            cancelBlurDeactivate()
+            setActiveId(nb.id)
+            return
+          }
+          // toolbar flow with nothing remembered — trailing empty paragraph
+          // swaps in place, otherwise the table appends below the last block
+          const arr = blocksRef.current
+          const last = arr[arr.length - 1]
+          if (last && last.type === 'p' && last.text.trim() === '') {
+            transformBlock(last.id, 'table', markdown)
+            cancelBlurDeactivate()
+            setActiveId(last.id)
+            return
+          }
+          const nb = createBlock('table', markdown)
+          commit([...arr, nb])
+          cancelBlurDeactivate()
+          setActiveId(nb.id)
+        },
+        clearPendingTable: () => {
+          pendingTableRef.current = null
         },
         insertInlineOrBlock: (tex: string) => {
           const id = activeIdRef.current

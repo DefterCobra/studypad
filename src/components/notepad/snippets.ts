@@ -43,6 +43,8 @@ export interface SlashCommand {
   imageAction?: ImageAction
   /** opens the visual formula maker — handled by the editor pane's dialog */
   formulaMaker?: true
+  /** opens the visual table maker — handled by the editor pane's dialog */
+  tableMaker?: true
 }
 
 /** Notion-style "/" commands for the block editor */
@@ -122,12 +124,10 @@ export const BLOCK_COMMANDS: SlashCommand[] = [
   {
     id: 'table',
     label: 'Table',
-    hint: 'Comparison table (edit raw, preview live)',
-    keywords: 'table grid rows columns comparison',
+    hint: 'Build a table visually — click to edit cells, import LaTeX',
+    keywords: 'table maker grid rows columns comparison latex tabular import build',
     icon: 'table',
-    blockType: 'table',
-    blockText: '| Term | Meaning |\n|---|---|\n|  |  |',
-    caretFromEnd: -3,
+    tableMaker: true,
   },
   {
     id: 'code',
