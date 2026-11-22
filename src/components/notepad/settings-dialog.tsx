@@ -10,6 +10,7 @@ import {
   House,
   Monitor,
   Moon,
+  MoonStar,
   RotateCcw,
   SlidersHorizontal,
   Sun,
@@ -109,8 +110,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const setHomeBatch = usePrefsStore((s) => s.setHomeBatch)
   const setAnimations = usePrefsStore((s) => s.setAnimations)
   const resetPrefs = usePrefsStore((s) => s.resetPrefs)
-  // the app theme ('light' | 'dark' | 'system') — lives here since the header
-  // theme button moved out of the top bar into Settings -> Home screen
+  // the app theme ('light' | 'dark' | 'midnight' | 'system') — lives here since
+  // the header theme button moved out of the top bar into Settings -> Home screen
   const { theme, setTheme } = useTheme()
   // the effective V10 optimisation state — Auto resolves against the device
   const lowMemory = useLowMemoryMode()
@@ -531,10 +532,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           Theme
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground/80">
-          Light or dark across the app — System follows your device setting.
+          Light, dark or midnight-blue — System follows your device setting.
         </p>
         <div
-          className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+          className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:grid-cols-4"
           role="radiogroup"
           aria-label="Theme"
         >
@@ -542,6 +543,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             [
               { id: 'light', label: 'Light', icon: Sun },
               { id: 'dark', label: 'Dark', icon: Moon },
+              { id: 'midnight', label: 'Midnight', icon: MoonStar },
               { id: 'system', label: 'System', icon: Monitor },
             ] as { id: string; label: string; icon: LucideIcon }[]
           ).map((opt) => {

@@ -1,7 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* `dark` matches .dark AND .midnight — the Midnight theme is a standalone class
+   (next-themes can't stack two classes), so every dark: utility below must stay
+   alive under html.midnight too */
+@custom-variant dark (&:is(.dark *, .midnight *));
 
 @theme inline {
   --color-background: var(--background);
@@ -164,6 +167,49 @@ html[data-note-size='xl'] {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* ---------- Midnight theme (Settings → Theme → Midnight) ----------
+   Deep midnight-blue surfaces with ambient off-white text. A standalone class
+   on <html> (NOT stacked with .dark — see the custom-variant note at the top),
+   so it re-declares the full variable set: anything not listed would fall
+   through to the :root LIGHT values. Chart + destructive colors mirror .dark. */
+.midnight {
+  /* next-themes only writes its inline color-scheme for literal light/dark, so
+     switching here could leave a stale 'light' inline style — !important wins
+     over it and keeps native widgets dark */
+  color-scheme: dark !important;
+  --background: oklch(0.17 0.04 268);
+  --foreground: oklch(0.93 0.012 250);
+  --card: oklch(0.21 0.042 268);
+  --card-foreground: oklch(0.93 0.012 250);
+  --popover: oklch(0.21 0.042 268);
+  --popover-foreground: oklch(0.93 0.012 250);
+  --primary: oklch(0.9 0.02 255);
+  --primary-foreground: oklch(0.22 0.05 268);
+  --secondary: oklch(0.26 0.045 268);
+  --secondary-foreground: oklch(0.93 0.012 250);
+  --muted: oklch(0.26 0.045 268);
+  --muted-foreground: oklch(0.72 0.025 262);
+  --accent: oklch(0.29 0.05 268);
+  --accent-foreground: oklch(0.94 0.012 250);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.75 0.025 255 / 15%);
+  --input: oklch(0.75 0.025 255 / 18%);
+  --ring: oklch(0.55 0.06 268);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.185 0.04 268);
+  --sidebar-foreground: oklch(0.93 0.012 250);
+  --sidebar-primary: oklch(0.55 0.11 268);
+  --sidebar-primary-foreground: oklch(0.93 0.012 250);
+  --sidebar-accent: oklch(0.27 0.05 268);
+  --sidebar-accent-foreground: oklch(0.93 0.012 250);
+  --sidebar-border: oklch(0.75 0.025 255 / 15%);
+  --sidebar-ring: oklch(0.55 0.06 268);
 }
 
 @layer base {
