@@ -14,10 +14,12 @@ import {
   FileUp,
   GraduationCap,
   HardDrive,
-  House,
+  LayoutGrid,
   Loader2,
   Pin,
   PinOff,
+  Plus,
+  Search,
   SlidersHorizontal,
   Trash2,
   TriangleAlert,
@@ -73,6 +75,11 @@ import { HomeScreen } from '@/components/notepad/home-screen'
 import { SyncRunner } from '@/components/notepad/sync-runner'
 import { useSyncStore, type SyncStatus } from '@/lib/notepad/sync'
 import { SettingsDialog } from '@/components/notepad/settings-dialog'
+import { NavRail, type AppScreen } from '@/components/notepad/nav-rail'
+import { BottomNav } from '@/components/notepad/bottom-nav'
+import { RevisePane } from '@/components/notepad/revise-pane'
+import { CommandPalette, type PaletteActions } from '@/components/notepad/command-palette'
+import { MoreSheet, type MoreSheetActions } from '@/components/notepad/more-sheet'
 import { useAnimationsEnabled, usePrefsStore } from '@/lib/prefs'
 
 const emptySubscribe = () => () => {}
@@ -109,9 +116,13 @@ function NotepadWorkspace({
   const [sideBySideDialogOpen, setSideBySideDialogOpen] = useState(false)
   const [sideBySide, setSideBySide] = useState<SideBySideSelection | null>(null)
   const [focusMode, setFocusMode] = useState<EditorFocusMode>('off')
-  // V9.0 home screen — every entry lands on "Pick up where you left off";
-  // opening anything from there swaps back into the workspace view
-  const [homeOpen, setHomeOpen] = useState(true)
+  // V9.0 home screen, V10.5 screens — 'home' ("Pick up where you left off"),
+  // 'workspace' (subjects | notes | editor) and 'revise' (the To-revise hub);
+  // opening anything from home swaps back into the workspace view
+  const [screen, setScreen] = useState<AppScreen>('home')
+  // V10.5 — the Ctrl/Cmd+K "Jump to" palette and the mobile More sheet
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mainRef = useRef<HTMLElement | null>(null)
   const selectedNote = useSelectedNote()
@@ -164,6 +175,11 @@ function NotepadWorkspace({
         conflict: { Icon: TriangleAlert, label: 'Conflict', iconClass: 'text-amber-600 dark:text-amber-400' },
       }[syncStatus]
   const SyncBadgeIcon = syncBadge.Icon
+  // the palette's keyboard hint matches the platform (⌘K on Apple keyboards)
+  const kbdHint =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+      ? '⌘K'
+      : 'Ctrl K'
 
   // Ctrl/Cmd+P opens the customisable print dialog instead of the raw browser print
   useEffect(() => {
@@ -173,6 +189,18 @@ function NotepadWorkspace({
           e.preventDefault()
           setPrintOpen(true)
         }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // V10.5 — Ctrl/Cmd+K toggles the "Jump to" command palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -260,7 +288,7 @@ function NotepadWorkspace({
     if (!saved) return
     selectNote(saved.id)
     setChapterTab('notes')
-    setHomeOpen(false)
+    setScreen('workspace')
     // selectNote / setChapterTab are stable zustand actions
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
@@ -334,10 +362,10 @@ function NotepadWorkspace({
     }
   }
 
-  // ---------- home screen (V9.0): jump from a pick straight into its pane ----------
+  // ---------- screens (V10.5): home ↔ workspace ↔ to-revise ----------
   const leaveHome = () => {
     setSideBySide(null)
-    setHomeOpen(false)
+    setScreen('workspace')
     setMobileView('editor')
   }
   const openNoteFromHome = (noteId: string) => {
@@ -361,15 +389,58 @@ function NotepadWorkspace({
   // (desktop keeps the sidebar always visible, the home button is lg-hidden)
   const openSidebarFromHome = () => {
     setSideBySide(null)
-    setHomeOpen(false)
+    setScreen('workspace')
     setMobileView('tree')
   }
   // V10 "View notes" — leave the home screen without opening anything;
   // mobile lands on the notes list, desktop shows the workspace as-is
   const openWorkspaceFromHome = () => {
     setSideBySide(null)
-    setHomeOpen(false)
+    setScreen('workspace')
     setMobileView('notes')
+  }
+  // V10.5 — the rail / grid icon: enter the workspace on a chosen pane
+  const goToWorkspace = (view: 'tree' | 'notes' | 'editor') => {
+    setSideBySide(null)
+    setScreen('workspace')
+    setMobileView(view)
+  }
+  // V10.5 — the "+" button and palette action: create a note in the selected
+  // chapter (or the first one) and open it straight in the editor
+  const createNewNote = () => {
+    const state = useNotepadStore.getState()
+    const chapterId = state.selectedChapterId ?? state.chapters[0]?.id ?? null
+    if (!chapterId) {
+      toast({
+        title: 'No chapter to write in',
+        description: 'Add a subject and a chapter in the sidebar first — then + starts the note.',
+      })
+      return
+    }
+    const note = state.addNote(chapterId)
+    state.selectNote(note.id)
+    setChapterTab('notes')
+    goToWorkspace('editor')
+  }
+  // V10.5 — shared navigation set for the command palette and the mobile sheet
+  const paletteActions: PaletteActions = {
+    goHome: () => setScreen('home'),
+    goRevise: () => setScreen('revise'),
+    goWorkspace: goToWorkspace,
+    newNote: createNewNote,
+    openSettings: () => setSettingsOpen(true),
+    openCheatSheet: () => setCheatOpen(true),
+    openSync: () => useSyncStore.getState().setDialogOpen(true),
+    exportBackup: handleExport,
+    exportZip: () => setExportZipOpen(true),
+    importBackup: () => fileInputRef.current?.click(),
+    importMd: () => setMdImportOpen(true),
+    importZip: () => setImportZipOpen(true),
+  }
+  const moreActions: MoreSheetActions = {
+    ...paletteActions,
+    clearAll: () => setClearOpen(true),
+    toggleHeaderPinned,
   }
 
   // welcome dialog: keep the current (seeded) notes or start from an empty pad
@@ -406,7 +477,7 @@ function NotepadWorkspace({
 
   return (
     <>
-      <div className="flex h-dvh flex-col bg-background text-foreground">
+      <div className="flex h-dvh flex-col bg-background pb-[4.5rem] text-foreground lg:pb-0">
       {/* Header — slides away while scrolling panes down (unless pinned);
           fully hidden while a focus mode is active */}
       {!focusActive && (
@@ -414,19 +485,42 @@ function NotepadWorkspace({
           inert={headerHidden}
           className={cn(
             'shrink-0 overflow-hidden transition-[height] duration-200 ease-out',
-            headerHidden ? 'h-0' : 'h-14',
+            headerHidden ? 'h-0' : 'h-16 lg:h-14',
           )}
         >
-        <div className="flex h-14 items-center gap-3 border-b px-4">
+        {/* V10.5 — the sketch header: a floating full-round pill on mobile
+            (logo, cloud sync beside the title, notes, avatar) and the classic
+            bar from lg up (search + "Jump to" palette triggers, +, grid,
+            data, avatar). Home / To revise live in the rail / bottom nav. */}
+        <div className="flex h-full items-center px-3 pb-2 pt-2 lg:border-b lg:px-4 lg:pb-0 lg:pt-0">
+        <div className="flex h-12 w-full items-center gap-1.5 rounded-full border bg-card px-2 shadow-sm lg:h-full lg:w-auto lg:flex-1 lg:gap-3 lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:shadow-none">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
             <GraduationCap className="h-5 w-5" />
           </div>
           <div className="leading-tight">
             <h1 className="text-sm font-bold">StudyPad</h1>
-            <p className="text-[11px] text-muted-foreground">Notepad for studies</p>
+            <p className="hidden text-[11px] text-muted-foreground sm:block">Notepad for studies</p>
           </div>
         </div>
+        {/* cloud sync right beside the title — mobile sketch: SHOW CLOUD SYNC HERE */}
+        <button
+          type="button"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:hidden"
+          aria-label={`Cloud save: ${syncBadge.label} — open cloud save`}
+          title={`Cloud save: ${syncBadge.label}`}
+          data-testid="sync-badge-mobile"
+          onClick={() => useSyncStore.getState().setDialogOpen(true)}
+        >
+          <SyncBadgeIcon
+            className={cn(
+              'h-4 w-4 shrink-0',
+              syncBadge.iconClass,
+              syncBadge.spin && 'animate-spin keep-anim',
+            )}
+            aria-hidden
+          />
+        </button>
         <Badge variant="secondary" className="hidden gap-1 sm:inline-flex" data-testid="sync-badge">
           <SyncBadgeIcon
             className={cn(
@@ -439,61 +533,81 @@ function NotepadWorkspace({
           {syncBadge.label}
         </Badge>
 
+        {/* desktop: both search and the sketch's "Jump to, ctrl+k or cmd+k"
+            box open the same command palette */}
+        <button
+          type="button"
+          className="hidden h-9 w-44 items-center gap-2 rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-accent/60 xl:w-56 lg:flex"
+          onClick={() => setPaletteOpen(true)}
+          aria-label="Search — opens the jump-to palette"
+          data-testid="header-search"
+        >
+          <Search className="h-4 w-4 shrink-0" aria-hidden />
+          Search…
+        </button>
+        <button
+          type="button"
+          className="hidden h-9 items-center gap-2 rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-accent/60 lg:flex"
+          onClick={() => setPaletteOpen(true)}
+          aria-label="Jump to — opens the command palette"
+          data-testid="header-jump"
+        >
+          Jump to
+          <kbd
+            className="ml-2 rounded border bg-background px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground"
+            data-testid="jump-kbd"
+          >
+            {kbdHint}
+          </kbd>
+        </button>
+
         <div className="ml-auto flex items-center gap-1.5">
-          {/* V9.0 home screen — one click back to "Pick up where you left off" */}
-          <Button
-            variant={homeOpen ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            aria-label={homeOpen ? 'Home screen — you are here' : 'Go to the home screen'}
-            title="Home"
-            data-testid="home-button"
-            onClick={() => setHomeOpen(true)}
-          >
-            <House className="h-4 w-4" />
-          </Button>
-          {/* Pin the app header so it stops auto-hiding while scrolling */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            aria-label={
-              headerPinned
-                ? 'Unpin header — it will auto-hide while scrolling'
-                : 'Pin header — always visible'
-            }
-            title={
-              headerPinned
-                ? 'Unpin header (auto-hides while scrolling)'
-                : 'Pin header (always visible)'
-            }
-            data-testid="pin-header-button"
-            onClick={toggleHeaderPinned}
-          >
-            {headerPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
-          </Button>
-          {/* Formula & markdown cheat sheet — one click away */}
+          {/* V10.5 — "+": one tap creates a note in the open chapter */}
           <Button
             variant="outline"
-            size="sm"
-            className="h-8 gap-1.5"
-            aria-label="Open the cheat sheet"
-            title="Cheat sheet"
-            data-testid="cheat-sheet-button"
-            onClick={() => setCheatOpen(true)}
+            size="icon"
+            className="hidden h-8 w-8 lg:inline-flex"
+            aria-label="New note"
+            title="New note"
+            data-testid="header-new-note"
+            onClick={createNewNote}
           >
-            <BookOpen className="h-4 w-4" />
-            <span className="hidden md:inline">Cheat sheet</span>
+            <Plus className="h-4 w-4" />
           </Button>
+          {/* the sketch's grid icon — one tap into the notes workspace */}
+          <Button
+            variant={screen === 'workspace' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Open the notes workspace"
+            title="Notes"
+            data-testid="header-notes-button"
+            onClick={() => goToWorkspace('notes')}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          {/* data menu (desktop — the mobile More sheet carries all of these) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Data menu">
+              <Button
+                variant="outline"
+                size="icon"
+                className="hidden h-8 w-8 lg:inline-flex"
+                aria-label="Data menu"
+              >
                 <Database className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
                 <SlidersHorizontal className="h-4 w-4" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCheatOpen(true)}>
+                <BookOpen className="h-4 w-4" /> Cheat sheet
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleHeaderPinned} data-testid="menu-pin-header">
+                {headerPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+                {headerPinned ? 'Unpin header' : 'Keep header visible'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-xs">Backup & data</DropdownMenuLabel>
@@ -543,16 +657,18 @@ function NotepadWorkspace({
           />
         </div>
         </div>
+        </div>
       </header>
       )}
 
       {/* Note tabs — swappable open notes (Settings → Note tabs → Multiple);
           hidden with the rest of the chrome in focus mode */}
       {/* home screen keeps the chrome minimal — the open-tabs bar stays hidden */}
-      {!focusActive && !homeOpen && tabMode === 'multi' && openNoteIds.length > 0 && (
+      {!focusActive && screen === 'workspace' && tabMode === 'multi' && openNoteIds.length > 0 && (
         <NoteTabs
           onOpenNote={() => {
             setSideBySide(null)
+            setScreen('workspace')
             setMobileView('editor')
           }}
           onSideBySide={() => setSideBySideDialogOpen(true)}
@@ -563,12 +679,21 @@ function NotepadWorkspace({
           in focus mode only the editor remains. The keyed wrapper replays a
           fade/rise entrance on every view swap (home ↔ workspace ↔ side-by-side)
           — the branches already remount, this only adds the transition. */}
-      <main ref={mainRef} className="flex min-h-0 min-w-0 flex-1">
+      {/* V10.5 — the collapsible notes pane (nav rail) sits left of everything */}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <NavRail
+          screen={screen}
+          hidden={focusActive}
+          onHome={() => setScreen('home')}
+          onNotes={() => goToWorkspace('notes')}
+          onRevise={() => setScreen('revise')}
+        />
+        <main ref={mainRef} className="flex min-h-0 min-w-0 flex-1">
         <div
-          key={homeOpen ? 'home' : sideLeft && sideRight ? 'side-by-side' : 'workspace'}
+          key={screen === 'workspace' && sideLeft && sideRight ? 'side-by-side' : screen}
           className={cn('flex min-h-0 min-w-0 flex-1', animsOn && 'anim-view-enter')}
         >
-        {homeOpen ? (
+        {screen === 'home' ? (
           <HomeScreen
             userId={userId}
             onOpenNote={openNoteFromHome}
@@ -577,6 +702,8 @@ function NotepadWorkspace({
             onOpenSidebar={openSidebarFromHome}
             onOpenWorkspace={openWorkspaceFromHome}
           />
+        ) : screen === 'revise' ? (
+          <RevisePane onOpenNote={openNoteFromHome} />
         ) : sideLeft && sideRight ? (
           <SideBySideView
             left={sideLeft}
@@ -687,11 +814,12 @@ function NotepadWorkspace({
           </>
         )}
         </div>
-      </main>
+        </main>
+      </div>
 
-      {/* Footer — hidden while a focus mode is active */}
+      {/* Footer — mobile navigates from the bottom pill instead; hidden in focus mode */}
       {!focusActive && (
-      <footer className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-0.5 border-t px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-[11px] text-muted-foreground">
+      <footer className="mt-auto hidden shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-0.5 border-t px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-[11px] text-muted-foreground lg:flex">
         <span className="tabular-nums">
           {subjects.length} subjects · {chapters.length} chapters · {notes.length} notes ·{' '}
           {flashcards.length} flashcards · {quizzes.length} quizzes — stored in your browser
@@ -703,6 +831,22 @@ function NotepadWorkspace({
       )}
 
       <CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} actions={paletteActions} />
+      <MoreSheet
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        actions={moreActions}
+        headerPinned={headerPinned}
+        syncLabel={syncLabel}
+      />
+      <BottomNav
+        screen={screen}
+        hidden={focusActive}
+        onHome={() => setScreen('home')}
+        onNotes={() => goToWorkspace('notes')}
+        onSearch={() => setPaletteOpen(true)}
+        onMore={() => setMoreOpen(true)}
+      />
       <WelcomeDialog onChoose={handleWelcomeChoice} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <SideBySideDialog

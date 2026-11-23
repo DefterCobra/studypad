@@ -11,6 +11,8 @@ import {
   Code2,
   Copy,
   FileUp,
+  Flag,
+  FlagOff,
   FlaskConical,
   GripVertical,
   Image as ImageIcon,
@@ -176,6 +178,7 @@ export function NotesPane({ onBack, onOpenNote, onImportMd }: NotesPaneProps) {
     selectQuiz,
     setSearchQuery,
     togglePin,
+    toggleRevise,
     deleteNote,
     deleteCard,
     moveCard,
@@ -650,6 +653,12 @@ export function NotesPane({ onBack, onOpenNote, onImportMd }: NotesPaneProps) {
                       {note.pinned && (
                         <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500" />
                       )}
+                      {note.revise && (
+                        <Flag
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-rose-500 text-rose-500"
+                          aria-label="Marked to revise"
+                        />
+                      )}
                       <p
                         className={cn(
                           'min-w-0 flex-1 break-words text-sm line-clamp-2',
@@ -695,6 +704,13 @@ export function NotesPane({ onBack, onOpenNote, onImportMd }: NotesPaneProps) {
                         <DropdownMenuItem onClick={() => togglePin(note.id)}>
                           {note.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                           {note.pinned ? 'Unpin' : 'Pin to top'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => toggleRevise(note.id)}
+                          data-testid={`note-revise-${note.id}`}
+                        >
+                          {note.revise ? <FlagOff className="h-4 w-4" /> : <Flag className="h-4 w-4" />}
+                          {note.revise ? 'Remove from To revise' : 'Mark to revise'}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setArranging(true)}

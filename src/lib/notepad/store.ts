@@ -162,6 +162,8 @@ export interface NotepadStore extends SelectionInput {
   updateNote: (id: string, patch: Partial<Pick<Note, 'title' | 'content'>>) => void
   deleteNote: (id: string) => void
   togglePin: (id: string) => void
+  /** V10.5 — flag/unflag a note for the "To revise" hub */
+  toggleRevise: (id: string) => void
 
   /** flashcards — a chapter's deck is the store array order (like chapters) */
   addCard: (chapterId: string, front?: string, back?: string) => Flashcard
@@ -632,6 +634,11 @@ export const useNotepadStore = create<NotepadStore>()(
       togglePin: (id) =>
         set((s) => ({
           notes: s.notes.map((n) => (n.id === id ? { ...n, pinned: !n.pinned } : n)),
+        })),
+
+      toggleRevise: (id) =>
+        set((s) => ({
+          notes: s.notes.map((n) => (n.id === id ? { ...n, revise: !n.revise } : n)),
         })),
 
       selectChapter: (chapterId) =>

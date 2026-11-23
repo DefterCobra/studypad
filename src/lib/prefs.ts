@@ -96,6 +96,9 @@ interface PrefsState {
    *  switching and the home ↔ workspace swap — Auto disables them on low-end
    *  devices (≤2 GB RAM) and for prefers-reduced-motion users */
   animations: AnimMode
+  /** V10.5 — the desktop navigation rail (Home / Notes / To revise) is
+   *  collapsed to its show-handle (per-device UI pref, not user data) */
+  navRailCollapsed: boolean
   setFont: (font: FontId) => void
   setNoteSize: (size: NoteSizeId) => void
   setTabMode: (mode: TabMode) => void
@@ -105,6 +108,7 @@ interface PrefsState {
   setHomeShowAllNotes: (value: boolean) => void
   setHomeBatch: (size: HomeBatch) => void
   setAnimations: (mode: AnimMode) => void
+  setNavRailCollapsed: (value: boolean) => void
   resetPrefs: () => void
 }
 
@@ -210,6 +214,7 @@ export const usePrefsStore = create<PrefsState>()(
       homeShowAllNotes: true,
       homeBatch: 10,
       animations: 'auto',
+      navRailCollapsed: false,
       setFont: (font) => set({ font }),
       setNoteSize: (noteSize) => set({ noteSize }),
       setTabMode: (tabMode) => set({ tabMode }),
@@ -219,6 +224,7 @@ export const usePrefsStore = create<PrefsState>()(
       setHomeShowAllNotes: (homeShowAllNotes) => set({ homeShowAllNotes }),
       setHomeBatch: (homeBatch) => set({ homeBatch }),
       setAnimations: (animations) => set({ animations }),
+      setNavRailCollapsed: (navRailCollapsed) => set({ navRailCollapsed }),
       resetPrefs: () =>
         set({
           font: 'default',
@@ -230,6 +236,7 @@ export const usePrefsStore = create<PrefsState>()(
           homeShowAllNotes: true,
           homeBatch: 10,
           animations: 'auto',
+          navRailCollapsed: false,
         }),
     }),
     {

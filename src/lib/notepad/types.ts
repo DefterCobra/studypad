@@ -18,6 +18,9 @@ export interface Note {
   title: string
   content: string
   pinned: boolean
+  /** V10.5 — flagged for the "To revise" list (nav rail / revision hub);
+   *  undefined until the user marks the note for the first time */
+  revise?: boolean
   /** manual position within the chapter, set by arrange mode — smaller = higher.
    *  Undefined until the user rearranges the chapter's notes for the first time. */
   order?: number
