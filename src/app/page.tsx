@@ -296,13 +296,11 @@ function NotepadWorkspace({
   // the two notes of the side-by-side view (null once either is deleted)
   const sideLeft = sideBySide ? notes.find((n) => n.id === sideBySide.leftId) ?? null : null
   const sideRight = sideBySide ? notes.find((n) => n.id === sideBySide.rightId) ?? null : null
-  // V10.6 — the primary nav (desktop rail / phone pill) floats over the
-  // Subjects pane, which is its own area. Only true while that pane is on
-  // screen: workspace, not side-by-side, no focus mode. On phones the pane
-  // is only visible on the 'tree' view.
-  const subjectsPaneShown = screen === 'workspace' && !(sideLeft && sideRight)
+  // V10.6 — the phone pill floats over the Subjects pane (its own area);
+  // the desktop rail floats on the page background at left-centre everywhere.
+  // On phones the Subjects pane is only visible on the 'tree' view.
   const navRailCollapsed = usePrefsStore((s) => s.navRailCollapsed)
-  const floatNavMobile = subjectsPaneShown && mobileView === 'tree' && !focusActive
+  const floatNavMobile = screen === 'workspace' && !(sideLeft && sideRight) && mobileView === 'tree' && !focusActive
   useEffect(() => {
     if (sideBySide && (!sideLeft || !sideRight)) setSideBySide(null)
   }, [sideBySide, sideLeft, sideRight])
@@ -694,11 +692,17 @@ function NotepadWorkspace({
           fade/rise entrance on every view swap (home ↔ workspace ↔ side-by-side)
           — the branches already remount, this only adds the transition. */}
       {/* V10.5 — the collapsible notes pane (nav rail) sits left of everything */}
-      <div className="relative flex min-h-0 min-w-0 flex-1">
+      <div
+        className={cn(
+          'relative flex min-h-0 min-w-0 flex-1 transition-[padding] duration-200',
+          // the rail floats on the plain page background at the left-centre of
+          // every screen; this transparent strip keeps content clear of it
+          !focusActive && (navRailCollapsed ? 'lg:pl-7' : 'lg:pl-20'),
+        )}
+      >
         <NavRail
           screen={screen}
           hidden={focusActive}
-          floating={subjectsPaneShown}
           onHome={() => setScreen('home')}
           onNotes={() => goToWorkspace('notes')}
           onRevise={() => setScreen('revise')}
@@ -731,9 +735,7 @@ function NotepadWorkspace({
         <aside
           className={cn(
             'w-full shrink-0 overflow-y-auto border-r bg-muted/20 max-lg:pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]',
-            // desktop: the floating rail sits over this pane, so the pane
-            // keeps a strip on its left (rail width, or the slim show-handle)
-            navRailCollapsed ? 'lg:w-[17.75rem] lg:pl-7' : 'lg:w-[21rem] lg:pl-20',
+            'lg:w-64',
             focusActive
               ? 'hidden'
               : cn(

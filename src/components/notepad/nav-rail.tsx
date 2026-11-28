@@ -26,9 +26,6 @@ interface NavRailProps {
   onRevise: () => void
   /** a focus mode hides all chrome */
   hidden?: boolean
-  /** float over the Subjects pane (absolute, vertically centred) instead of
-   *  taking its own column — the pane reserves the strip underneath */
-  floating?: boolean
 }
 
 function RailButton({
@@ -63,7 +60,7 @@ function RailButton({
   )
 }
 
-export function NavRail({ screen, onHome, onNotes, onRevise, hidden, floating }: NavRailProps) {
+export function NavRail({ screen, onHome, onNotes, onRevise, hidden }: NavRailProps) {
   const collapsed = usePrefsStore((s) => s.navRailCollapsed)
   const setCollapsed = usePrefsStore((s) => s.setNavRailCollapsed)
 
@@ -72,12 +69,7 @@ export function NavRail({ screen, onHome, onNotes, onRevise, hidden, floating }:
   if (collapsed) {
     return (
       <div
-        className={cn(
-          'hidden flex-col items-center lg:flex',
-          floating
-            ? 'absolute left-0 top-1/2 z-30 -translate-y-1/2'
-            : 'shrink-0 py-2',
-        )}
+        className="absolute left-0 top-1/2 z-30 hidden -translate-y-1/2 flex-col items-center lg:flex"
         data-testid="nav-rail-collapsed"
       >
         <button
@@ -98,19 +90,9 @@ export function NavRail({ screen, onHome, onNotes, onRevise, hidden, floating }:
     <nav
       aria-label="Primary"
       data-testid="nav-rail"
-      className={cn(
-        'hidden flex-col items-center lg:flex',
-        floating
-          ? 'absolute left-2 top-1/2 z-30 -translate-y-1/2'
-          : 'relative shrink-0 py-2',
-      )}
+      className="absolute left-2 top-1/2 z-30 hidden -translate-y-1/2 flex-col items-center lg:flex"
     >
-      <div
-        className={cn(
-          'flex flex-col items-center gap-1.5 rounded-full border bg-card px-1 py-4',
-          floating ? 'bg-card/95 shadow-lg backdrop-blur' : 'shadow-sm',
-        )}
-      >
+      <div className="flex flex-col items-center gap-1.5 rounded-full border bg-card/95 px-1 py-4 shadow-lg backdrop-blur">
         <RailButton
           active={screen === 'home'}
           label="Home"
