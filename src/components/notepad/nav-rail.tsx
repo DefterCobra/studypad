@@ -26,6 +26,9 @@ interface NavRailProps {
   onRevise: () => void
   /** a focus mode hides all chrome */
   hidden?: boolean
+  /** float over the Subjects pane (absolute, vertically centred) instead of
+   *  taking its own column — the pane reserves the strip underneath */
+  floating?: boolean
 }
 
 function RailButton({
@@ -60,7 +63,7 @@ function RailButton({
   )
 }
 
-export function NavRail({ screen, onHome, onNotes, onRevise, hidden }: NavRailProps) {
+export function NavRail({ screen, onHome, onNotes, onRevise, hidden, floating }: NavRailProps) {
   const collapsed = usePrefsStore((s) => s.navRailCollapsed)
   const setCollapsed = usePrefsStore((s) => s.setNavRailCollapsed)
 
@@ -69,7 +72,12 @@ export function NavRail({ screen, onHome, onNotes, onRevise, hidden }: NavRailPr
   if (collapsed) {
     return (
       <div
-        className="hidden shrink-0 flex-col items-center py-2 lg:flex"
+        className={cn(
+          'hidden flex-col items-center lg:flex',
+          floating
+            ? 'absolute left-0 top-1/2 z-30 -translate-y-1/2'
+            : 'shrink-0 py-2',
+        )}
         data-testid="nav-rail-collapsed"
       >
         <button
@@ -90,9 +98,19 @@ export function NavRail({ screen, onHome, onNotes, onRevise, hidden }: NavRailPr
     <nav
       aria-label="Primary"
       data-testid="nav-rail"
-      className="relative hidden shrink-0 flex-col items-center py-2 lg:flex"
+      className={cn(
+        'hidden flex-col items-center lg:flex',
+        floating
+          ? 'absolute left-2 top-1/2 z-30 -translate-y-1/2'
+          : 'relative shrink-0 py-2',
+      )}
     >
-      <div className="flex flex-col items-center gap-1.5 rounded-full border bg-card px-1 py-4 shadow-sm">
+      <div
+        className={cn(
+          'flex flex-col items-center gap-1.5 rounded-full border bg-card px-1 py-4',
+          floating ? 'bg-card/95 shadow-lg backdrop-blur' : 'shadow-sm',
+        )}
+      >
         <RailButton
           active={screen === 'home'}
           label="Home"
